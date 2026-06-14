@@ -189,3 +189,193 @@ The backend FastAPI gateway runs at `http://127.0.0.1:8435`:
 *   `GET /skills?domain=...`: Retrieves predefined JSON skill pipelines for the specified domain.
 *   `POST /chat`: Simple non-streaming message response endpoint.
 *   `POST /chat/stream`: Initiates an SSE text stream event channel, sending live tracer cards for active tools.
+
+---
+
+## Step-by-Step Code Execution Trace (Debugging Walkthrough)
+
+To make it easy to follow the flow of control, here is a step-by-step trace showing exactly how inputs and outputs travel through the codebase for different scenarios.
+
+---
+
+### Scenario A: Vacation Flight Booking (Travel Domain)
+**User Prompt:** `"I want to book a flight from New York to Paris on 2026-08-10 and generate my itinerary."`
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant UI as "Playground UI"
+    participant App as "app.py"
+    participant Agent as "agent.py"
+    participant MCPServer as "mcp_servers/travel/mcp_server_travel.py"
+    participant Ollama as "Ollama Service"
+
+    UI->>App: POST /chat/stream {"messages": [{"role": "user", "content": "I want to book a flight from New York to Paris on 2026-08-10 and generate my itinerary."}], "domain": "travel"}
+    App->>Agent: check_and_run_tools(...)
+    Note over Agent: Spawns Travel MCP Server Subprocess
+    Agent->>MCPServer: list_tools()
+    MCPServer-->>Agent: Returns travel tools [search_flights, book_flight, search_hotels, book_hotel, rent_car, book_attraction, generate_travel_itinerary]
+    
+    Note over Agent,Ollama: Iteration 1
+    Agent->>Ollama: [LLM Call] check tool calls (iteration 1)
+    Ollama-->>Agent: returns tool_calls: [search_flights(origin='New York', destination='Paris', date='2026-08-10')]
+    Agent-->>App: Yield status event (Calling search_flights...)
+    App-->>UI: Stream SSE tracer update
+    Agent->>MCPServer: call_tool(name='search_flights', arguments={'origin': 'New York', 'destination': 'Paris', 'date': '2026-08-10'})
+    MCPServer-->>Agent: returns {"flights": [{"flight_id": "FL-101", ...}], "content": "..."}
+    Agent-->>App: Yield status event (search_flights finished)
+    App-->>UI: Stream SSE tracer update
+    
+    Note over Agent,Ollama: Iteration 2
+    Agent->>Ollama: [LLM Call] check tool calls (iteration 2)
+    Ollama-->>Agent: returns tool_calls: [book_flight(flight_id='FL-101')]
+    Agent-->>App: Yield status event (Calling book_flight...)
+    App-->>UI: Stream SSE tracer update
+    Agent->>MCPServer: call_tool(name='book_flight', arguments={'flight_id': 'FL-101'})
+    MCPServer-->>Agent: returns {"booking": {"flight_id": "FL-101", "booking_code": "NVX21M", ...}}
+    Agent-->>App: Yield status event (book_flight finished)
+    App-->>UI: Stream SSE tracer update
+    
+    Note over Agent,Ollama: Iteration 3
+    Agent->>Ollama: [LLM Call] check tool calls (iteration 3)
+    Ollama-->>Agent: returns tool_calls: [generate_travel_itinerary(bookings=[{"flight_id": "FL-101", ...}])]
+    Agent-->>App: Yield status event (Calling generate_travel_itinerary...)
+    App-->>UI: Stream SSE tracer update
+    Agent->>MCPServer: call_tool(name='generate_travel_itinerary', arguments={'bookings': [...]})
+    MCPServer-->>Agent: returns {"itinerary_text": "...", "content": "..."}
+    Agent-->>App: Yield status event (generate_travel_itinerary finished)
+    App-->>UI: Stream SSE tracer update
+    
+    Note over Agent,Ollama: Iteration 4
+    Agent->>Ollama: [LLM Call] check tool calls (iteration 4)
+    Ollama-->>Agent: returns no more tool_calls
+    
+    Agent-->>App: returns tool_messages, tool_results, llm_calls (4)
+    Note over Agent: Cleans up Travel MCP Server Subprocess
+    App->>Ollama: [LLM Call] Stream final chat response (with tool results)
+    Ollama-->>App: Stream response chunks
+    App-->>UI: Stream final SSE chat chunks
+```
+
+#### **Step 1: Frontend Request**
+The user selects the **Vacation Travel Planner** domain and enters the prompt. The browser client (`index.html`) issues an HTTP `POST` request to `/chat/stream` with the conversation history and active domain:
+*   **Payload:**
+    ```json
+    {
+      "messages": [
+        {"role": "user", "content": "I want to book a flight from New York to Paris on 2026-08-10 and generate my itinerary."}
+      ],
+      "domain": "travel",
+      "session_name": "default"
+    }
+    ```
+
+#### **Step 2: Gateway Entry & Agent Call (`app.py` & `agent.py`)**
+1. The gateway endpoint `chat_stream` in `app.py` receives the payload and invokes `check_and_run_tools()`.
+2. The agent spawns the `mcp_servers/travel/mcp_server_travel.py` subprocess.
+3. The agent calls `list_tools()` to discover the available travel planning tools and registers them.
+
+#### **Step 3: ReAct Reasoning Loop & Execution Trace (`agent.py`)**
+1. **Turn 1 (Search):** The agent queries Ollama. Ollama identifies that the user wants to book a flight but needs flight options first, returning a request to call `search_flights(origin='New York', destination='Paris', date='2026-08-10')`. The agent executes the tool, which returns a list of flight choices (including `FL-101`).
+2. **Turn 2 (Booking):** The agent queries Ollama with the flight options. Ollama selects flight `FL-101` and requests `book_flight(flight_id='FL-101')`. The agent executes this tool and receives a confirmation code.
+3. **Turn 3 (Itinerary):** The agent queries Ollama with the booking confirmation. Ollama realizes all steps for the requested pipeline are complete and requests `generate_travel_itinerary(bookings=[...])`. The agent runs the compiler to produce a structured document.
+4. **Turn 4 (Finished):** The agent queries Ollama one final time, which returns no further tool calls.
+
+#### **Step 4: Cleanup & Final Inference (`app.py`)**
+1. The agent terminates the travel MCP subprocess.
+2. The gateway appends the tool messages history to the conversation list and requests the final streaming inference from Ollama.
+3. Ollama generates a friendly conversational summary containing the travel itinerary details, which streams directly to the frontend.
+
+---
+
+### Scenario B: Party Setup & Venue Booking (Party Domain)
+**User Prompt:** `"Invite Bob and Alice, compute the budget, and book venue Cozy Club for 15 guests."`
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant UI as "Playground UI"
+    participant App as "app.py"
+    participant Agent as "agent.py"
+    participant MCPServer as "mcp_servers/party/mcp_server_party.py"
+    participant Ollama as "Ollama Service"
+
+    UI->>App: POST /chat/stream {"messages": [{"role": "user", "content": "Invite Bob and Alice, compute the budget, and book venue Cozy Club for 15 guests."}], "domain": "party"}
+    App->>Agent: check_and_run_tools(...)
+    Note over Agent: Spawns Party MCP Server Subprocess
+    Agent->>MCPServer: list_tools()
+    MCPServer-->>Agent: Returns party tools [invite_guests, budget_expenses, book_venue, order_cake, hire_entertainment, buy_decorations, send_reminders]
+    
+    Note over Agent,Ollama: Iteration 1
+    Agent->>Ollama: [LLM Call] check tool calls (iteration 1)
+    Ollama-->>Agent: returns tool_calls: [invite_guests(guest_names=['Bob', 'Alice'])]
+    Agent-->>App: Yield status event (Calling invite_guests...)
+    App-->>UI: Stream SSE tracer update
+    Agent->>MCPServer: call_tool(name='invite_guests', arguments={'guest_names': ['Bob', 'Alice']})
+    MCPServer-->>Agent: returns {"rsvp_count": 2, "content": "..."}
+    Agent-->>App: Yield status event (invite_guests finished)
+    App-->>UI: Stream SSE tracer update
+    
+    Note over Agent,Ollama: Iteration 2
+    Agent->>Ollama: [LLM Call] check tool calls (iteration 2)
+    Ollama-->>Agent: returns tool_calls: [budget_expenses(rsvp_count=2)]
+    Agent-->>App: Yield status event (Calling budget_expenses...)
+    App-->>UI: Stream SSE tracer update
+    Agent->>MCPServer: call_tool(name='budget_expenses', arguments={'rsvp_count': 2})
+    MCPServer-->>Agent: returns {"budget": {"rsvp_count": 2, "total_estimated_cost": 80, ...}}
+    Agent-->>App: Yield status event (budget_expenses finished)
+    App-->>UI: Stream SSE tracer update
+    
+    Note over Agent,Ollama: Iteration 3
+    Agent->>Ollama: [LLM Call] check tool calls (iteration 3)
+    Ollama-->>Agent: returns tool_calls: [book_venue(venue_name='Cozy Club', guest_count=15)]
+    Agent-->>App: Yield status event (Calling book_venue...)
+    App-->>UI: Stream SSE tracer update
+    Agent->>MCPServer: call_tool(name='book_venue', arguments={'venue_name': 'Cozy Club', 'guest_count': 15})
+    MCPServer-->>Agent: returns {"booking": {"venue_name": "Cozy Club", "guest_count": 15, "confirmation": "VNU-J4YJRH", ...}}
+    Agent-->>App: Yield status event (book_venue finished)
+    App-->>UI: Stream SSE tracer update
+    
+    Note over Agent,Ollama: Iteration 4
+    Agent->>Ollama: [LLM Call] check tool calls (iteration 4)
+    Ollama-->>Agent: returns no more tool_calls
+    
+    Agent-->>App: returns tool_messages, tool_results, llm_calls (4)
+    Note over Agent: Cleans up Party MCP Server Subprocess
+    App->>Ollama: [LLM Call] Stream final chat response
+    Ollama-->>App: Stream response chunks
+    App-->>UI: Stream final SSE chat chunks
+```
+
+#### **Step-by-Step Execution Log Trace (As-Is from Logger)**
+
+```diff
+  [app.py:event_generator:130] Received chat stream request for domain 'party'. Temperature=0.3
+  [app.py:event_generator:140] Message history loaded with system prompt for domain 'party'. Total messages: 2
+  [agent.py:check_and_run_tools:143] Spawning mcp_server_party.py subprocess...
+  [agent.py:check_and_run_tools:155] Discovered 7 tool(s) from MCP server: ['invite_guests', 'budget_expenses', 'book_venue', 'order_cake', 'hire_entertainment', 'buy_decorations', 'send_reminders']
++ [agent.py:check_and_run_tools:173] [LLM Call] Checking if the model requests any tool calls (iteration 1)...
+  [agent.py:check_and_run_tools:233] Model requested 1 tool call(s) at iteration 1: ['invite_guests']
+  [agent.py:check_and_run_tools:256] Executing tool 'invite_guests' via MCP with args: {'guest_names': ['Bob', 'Alice']}
+  [invite_guests.py:handler:25] Sending party invitations to 2 guests...
+  [invite_guests.py:handler:32] RSVP count received: 2/2
+  [agent.py:check_and_run_tools:325] Tool 'invite_guests' execution completed successfully.
++ [agent.py:check_and_run_tools:173] [LLM Call] Checking if the model requests any tool calls (iteration 2)...
+  [agent.py:check_and_run_tools:233] Model requested 1 tool call(s) at iteration 2: ['budget_expenses']
+  [agent.py:check_and_run_tools:256] Executing tool 'budget_expenses' via MCP with args: {'rsvp_count': 2}
+  [budget_expenses.py:handler:23] Estimating costs for 2 guests...
+  [budget_expenses.py:handler:42] Total estimated budget: $80
+  [agent.py:check_and_run_tools:325] Tool 'budget_expenses' execution completed successfully.
++ [agent.py:check_and_run_tools:173] [LLM Call] Checking if the model requests any tool calls (iteration 3)...
+  [agent.py:check_and_run_tools:233] Model requested 1 tool call(s) at iteration 3: ['book_venue']
+  [agent.py:check_and_run_tools:256] Executing tool 'book_venue' via MCP with args: {'venue_name': 'Cozy Club', 'guest_count': 15}
+  [book_venue.py:handler:28] Reserving venue 'Cozy Club' for 15 guests...
+  [book_venue.py:handler:41] Venue booked successfully. Confirmation: VNU-J4YJRH
+  [agent.py:check_and_run_tools:325] Tool 'book_venue' execution completed successfully.
++ [agent.py:check_and_run_tools:173] [LLM Call] Checking if the model requests any tool calls (iteration 4)...
+  [agent.py:check_and_run_tools:223] No more tool calls requested by the model at iteration 4.
+  [app.py:event_generator:157] Extending history with 6 tool message(s).
++ [app.py:event_generator:160] [LLM Call] Calling Ollama chat stream...
+  [app.py:event_generator:176] Stream completed successfully. Sent 288 chunk(s).
+  [app.py:event_generator:179] Session Summary: Total LLM Calls: 5 | Executed Tool Calls: ['invite_guests', 'budget_expenses', 'book_venue']
+```
