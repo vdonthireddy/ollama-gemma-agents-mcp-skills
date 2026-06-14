@@ -388,33 +388,33 @@ sequenceDiagram
 #### **Step-by-Step Execution Log Trace (As-Is from Logger)**
 
 ```diff
-  [app.py:event_generator:129] Received chat stream request for domain 'party'. Temperature=0.3
-  [app.py:event_generator:139] Message history loaded with system prompt for domain 'party'. Total messages: 2
-+ [agent.py:check_and_run_tools:122] Connecting to MCP server at http://127.0.0.1:8002/sse...
-+ [agent.py:check_and_run_tools:127] Initializing MCP Client Session...
-  [agent.py:check_and_run_tools:155] Discovered 7 tool(s) from MCP server: ['invite_guests', 'budget_expenses', 'book_venue', 'order_cake', 'hire_entertainment', 'buy_decorations', 'send_reminders']
-+ [agent.py:check_and_run_tools:159] [LLM Call] Checking if the model requests any tool calls (iteration 1)...
-  [agent.py:check_and_run_tools:219] Model requested 1 tool call(s) at iteration 1: ['invite_guests']
-  [agent.py:check_and_run_tools:242] Executing tool 'invite_guests' via MCP with args: {'guest_names': ['Bob', 'Alice']}
+  [app.py:event_generator:147] Received chat stream request for domain 'party'. Temperature=0.3
+  [app.py:event_generator:157] Message history loaded with system prompt for domain 'party'. Total messages: 2
++ [agent.py:check_and_run_tools:158] Connecting to 1 active MCP server(s)...
++ [agent.py:check_and_run_tools:175] Initializing dynamic MCP tool discovery...
+  [agent.py:check_and_run_tools:213] Discovered 7 tool(s) from MCP server: ['invite_guests', 'budget_expenses', 'book_venue', 'order_cake', 'hire_entertainment', 'buy_decorations', 'send_reminders']
++ [agent.py:check_and_run_tools:217] [LLM Call] Checking if the model requests any tool calls (iteration 1)...
+  [agent.py:check_and_run_tools:277] Model requested 1 tool call(s) at iteration 1: ['invite_guests']
+  [agent.py:check_and_run_tools:300] Executing tool 'invite_guests' via MCP with args: {'guest_names': ['Bob', 'Alice']}
   [invite_guests.py:handler:25] Sending party invitations to 2 guests...
   [invite_guests.py:handler:32] RSVP count received: 2/2
-  [agent.py:check_and_run_tools:311] Tool 'invite_guests' execution completed successfully.
-+ [agent.py:check_and_run_tools:159] [LLM Call] Checking if the model requests any tool calls (iteration 2)...
-  [agent.py:check_and_run_tools:219] Model requested 1 tool call(s) at iteration 2: ['budget_expenses']
-  [agent.py:check_and_run_tools:242] Executing tool 'budget_expenses' via MCP with args: {'rsvp_count': 2}
+  [agent.py:check_and_run_tools:374] Tool 'invite_guests' execution completed successfully.
++ [agent.py:check_and_run_tools:217] [LLM Call] Checking if the model requests any tool calls (iteration 2)...
+  [agent.py:check_and_run_tools:277] Model requested 1 tool call(s) at iteration 2: ['budget_expenses']
+  [agent.py:check_and_run_tools:300] Executing tool 'budget_expenses' via MCP with args: {'rsvp_count': 2}
   [budget_expenses.py:handler:23] Estimating costs for 2 guests...
   [budget_expenses.py:handler:42] Total estimated budget: $80
-  [agent.py:check_and_run_tools:311] Tool 'budget_expenses' execution completed successfully.
-+ [agent.py:check_and_run_tools:159] [LLM Call] Checking if the model requests any tool calls (iteration 3)...
-  [agent.py:check_and_run_tools:219] Model requested 1 tool call(s) at iteration 3: ['book_venue']
-  [agent.py:check_and_run_tools:242] Executing tool 'book_venue' via MCP with args: {'venue_name': 'Cozy Club', 'guest_count': 15}
+  [agent.py:check_and_run_tools:374] Tool 'budget_expenses' execution completed successfully.
++ [agent.py:check_and_run_tools:217] [LLM Call] Checking if the model requests any tool calls (iteration 3)...
+  [agent.py:check_and_run_tools:277] Model requested 1 tool call(s) at iteration 3: ['book_venue']
+  [agent.py:check_and_run_tools:300] Executing tool 'book_venue' via MCP with args: {'venue_name': 'Cozy Club', 'guest_count': 15}
   [book_venue.py:handler:28] Reserving venue 'Cozy Club' for 15 guests...
   [book_venue.py:handler:41] Venue booked successfully. Confirmation: VNU-J4YJRH
-  [agent.py:check_and_run_tools:311] Tool 'book_venue' execution completed successfully.
-+ [agent.py:check_and_run_tools:159] [LLM Call] Checking if the model requests any tool calls (iteration 4)...
-  [agent.py:check_and_run_tools:209] No more tool calls requested by the model at iteration 4.
-  [app.py:event_generator:156] Extending history with 6 tool message(s).
-+ [app.py:event_generator:159] [LLM Call] Calling Ollama chat stream...
-  [app.py:event_generator:175] Stream completed successfully. Sent 288 chunk(s).
-  [app.py:event_generator:178] Session Summary: Total LLM Calls: 5 | Executed Tool Calls: ['invite_guests', 'budget_expenses', 'book_venue']
+  [agent.py:check_and_run_tools:374] Tool 'book_venue' execution completed successfully.
++ [agent.py:check_and_run_tools:217] [LLM Call] Checking if the model requests any tool calls (iteration 4)...
+  [agent.py:check_and_run_tools:267] No more tool calls requested by the model at iteration 4.
+  [app.py:event_generator:174] Extending history with 6 tool message(s).
++ [app.py:event_generator:177] [LLM Call] Calling Ollama chat stream...
+  [app.py:event_generator:193] Stream completed successfully. Sent 288 chunk(s).
+  [app.py:event_generator:196] Session Summary: Total LLM Calls: 5 | Executed Tool Calls: ['invite_guests', 'budget_expenses', 'book_venue']
 ```

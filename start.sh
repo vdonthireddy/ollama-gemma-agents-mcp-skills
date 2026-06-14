@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# start.sh - Download and serve gemma4:e4b using Ollama
+# start.sh - Download and serve gemma2:2b using Ollama
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -70,7 +70,7 @@ if [ -f "app.py" ]; then
 
     # Install Python dependencies if not present
     echo -e "${YELLOW}Checking python dependencies...${NC}"
-    python3 -c "import fastapi, uvicorn, ollama, ddgs, dotenv, mcp, fastmcp" > /dev/null 2>&1
+    python3 -c "import fastapi, uvicorn, ollama, dotenv, mcp, fastmcp" > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo -e "${YELLOW}Installing missing python dependencies from requirements.txt...${NC}"
         python3 -m pip install -r requirements.txt

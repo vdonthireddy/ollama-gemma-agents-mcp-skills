@@ -84,7 +84,6 @@ def list_skills() -> str:
     return json.dumps(skills_list)
 
 if __name__ == "__main__":
-    import os
     host = os.getenv("TRAVEL_MCP_HOST", "127.0.0.1")
     port = int(os.getenv("TRAVEL_MCP_PORT", "8001"))
     mcp.run(transport="sse", host=host, port=port)

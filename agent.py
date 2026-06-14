@@ -46,9 +46,8 @@ async def get_system_prompt(domain: str = "travel") -> str:
                                 loaded_skills = json.loads(content.text)
                                 if isinstance(loaded_skills, list):
                                     skills_list.extend(loaded_skills)
-        except Exception:
-            # Silently fail or fallback if server is offline
-            pass
+        except Exception as e:
+            log_error("system", f"Failed to fetch skills from MCP server '{name}' at {mcp_url}: {e}")
 
     skills_instruction = ""
     if skills_list:
@@ -138,11 +137,17 @@ async def check_and_run_tools(messages: list, model_name: str, domain: str = "tr
     llm_calls = 0
     current_messages = list(messages)
     
-    # Retrieve all active MCP URLs dynamically from environment variables
+    # Retrieve MCP URLs filtered by domain (consistent with get_system_prompt/get_mcp_tools)
     urls = []
-    for key, val in os.environ.items():
-        if key.endswith("_MCP_URL") and val:
-            urls.append((key.replace("_MCP_URL", "").lower(), val))
+    if domain in ("all", "unified"):
+        for key, val in os.environ.items():
+            if key.endswith("_MCP_URL") and val:
+                urls.append((key.replace("_MCP_URL", "").lower(), val))
+    else:
+        target_key = f"{domain.upper()}_MCP_URL"
+        val = os.getenv(target_key)
+        if val:
+            urls.append((domain.lower(), val))
             
     if not urls:
         log_error(session_name, "Error: No MCP URLs configured in environment.")
@@ -179,6 +184,8 @@ async def check_and_run_tools(messages: list, model_name: str, domain: str = "tr
                 try:
                     tools_res = await session.list_tools()
                     for t in tools_res.tools:
+                        if t.name in tool_to_session:
+                            log_error(session_name, f"Tool name collision: '{t.name}' already registered by another server, overwriting with '{name}' server.")
                         tool_to_session[t.name] = session
                         mcp_tools.append(t)
                 except Exception as e:

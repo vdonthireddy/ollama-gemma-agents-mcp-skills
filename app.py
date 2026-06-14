@@ -26,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_NAME = os.getenv("MODEL_NAME", "gemma4:e4b")
+MODEL_NAME = os.getenv("MODEL_NAME", "gemma2:2b")
 
 class Message(BaseModel):
     role: str
