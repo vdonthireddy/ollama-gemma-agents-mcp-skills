@@ -2,7 +2,7 @@
 
 ![GemmaJnana Banner](./images/linkedin_banner_v5.png)
 
-A local development stack to download, serve, and interact with Google's **Gemma 4 (Effective 4B)** model using **Ollama** and an asynchronous **FastAPI** gateway. The package includes a multi-domain Model Context Protocol (MCP) server structure and a beautiful, fully animated chat playground UI.
+A local development stack to download, serve, and interact with Google's **Gemma 2 (2B)** model using **Ollama** and an asynchronous **FastAPI** gateway. The package includes a multi-domain Model Context Protocol (MCP) server structure and a beautiful, fully animated chat playground UI.
 
 ---
 
@@ -10,7 +10,7 @@ A local development stack to download, serve, and interact with Google's **Gemma
 
 Below is the visual flow of the GemmaJnana local multi-domain architecture.
 
-![Architecture Flow](./images/architecture_flow_v5.png)
+![Architecture Flow](./images/architecture_flow_v6.png)
 
 ### Data Flow Diagram
 
