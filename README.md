@@ -541,10 +541,10 @@ The user selects the **Vacation Travel Planner** domain and enters the prompt. T
     ```
 
 #### **Step 2: Gateway Entry & Agent Call (`app.py` & `agent.py`)**
-1. **Gateway Call:** The gateway endpoint `chat_stream` in `app.py` receives the payload and invokes `check_and_run_tools()`.
-2. **Dynamic Server Discovery:** The agent does not hardcode server endpoints. Instead, it inspects the system environment variables loaded from the `.env` file, looking up the key matching `{domain.upper()}_MCP_URL` (e.g. `TRAVEL_MCP_URL`). If `domain="all"` or `domain="unified"`, it dynamically iterates all keys ending in `_MCP_URL`.
-3. **Transport Handshake:** The agent connects to the resolved SSE URL (e.g., `http://127.0.0.1:8001/sse`) using the Server-Sent Events standard transport (`sse_client`), initializes an MCP `ClientSession`, and performs the initial protocol handshake.
-4. **Dynamic Tool Registration:** The agent invokes `list_tools()` over the network session. The MCP server returns its supported tool schemas. The agent registers them dynamically in a local `tool_to_session` router map to handle subsequent LLM tool calls.
+1. **Gateway Call & Skills Discovery:** The gateway endpoint `chat_stream` in `app.py` receives the payload. Before calling the agent orchestrator, it fetches the dynamic system prompt by calling `get_system_prompt(domain)`. This method connects to the Travel MCP server via SSE, queries the custom resource URI `skills://list`, parses the returned JSON containing the travel skills (e.g. Flight Booking, Full Itinerary pipelines), injects them into the system prompt, and closes the session.
+2. **Dynamic Server Discovery:** The gateway then calls `check_and_run_tools()`. The agent reads the system environment variables to resolve `TRAVEL_MCP_URL` (`http://127.0.0.1:8001/sse`).
+3. **Transport Handshake:** The agent opens an SSE connection using `sse_client(mcp_url)`, initializes a `ClientSession`, and performs the protocol handshake.
+4. **Dynamic Tool Registration:** The agent calls `list_tools()` over JSON-RPC. The Travel MCP server returns the schemas for the 7 travel tools. The agent registers them dynamically in a local `tool_to_session` registry to route future tool calls to the correct session, and translates them to Ollama's tool-calling definitions.
 
 #### **Step 3: ReAct Reasoning Loop & Execution Trace (`agent.py`)**
 1. **Turn 1 (Search):** The agent queries Ollama. Ollama identifies that the user wants to book a flight but needs flight options first, returning a request to call `search_flights(origin='New York', destination='Paris', date='2026-08-10')`. The agent executes the tool over HTTP/SSE, which returns a list of flight choices (including `FL-101`).
@@ -646,10 +646,10 @@ The user selects the **Birthday Party Planner** domain and enters the prompt. Th
     ```
 
 #### **Step 2: Gateway Entry & Agent Call (`app.py` & `agent.py`)**
-1. **Gateway Call:** The gateway endpoint `chat_stream` in `app.py` receives the payload and invokes `check_and_run_tools()`.
-2. **Dynamic Server Discovery:** The agent does not hardcode server endpoints. Instead, it inspects the system environment variables loaded from the `.env` file, looking up the key matching `{domain.upper()}_MCP_URL` (e.g. `PARTY_MCP_URL`). If `domain="all"` or `domain="unified"`, it dynamically iterates all keys ending in `_MCP_URL`.
-3. **Transport Handshake:** The agent connects to the resolved SSE URL (e.g., `http://127.0.0.1:8002/sse`) using the Server-Sent Events standard transport (`sse_client`), initializes an MCP `ClientSession`, and performs the initial protocol handshake.
-4. **Dynamic Tool Registration:** The agent invokes `list_tools()` over the network session. The MCP server returns its supported tool schemas (such as `invite_guests`, `budget_expenses`, `book_venue`). The agent registers them dynamically in a local `tool_to_session` router map to handle subsequent LLM tool calls.
+1. **Gateway Call & Skills Discovery:** The gateway endpoint `chat_stream` in `app.py` receives the payload. Before calling the agent orchestrator, it fetches the dynamic system prompt by calling `get_system_prompt(domain)`. This method connects to the Party MCP server via SSE, queries the custom resource URI `skills://list`, parses the returned JSON containing the party skills (e.g. Core Event Planning, Invitation & Budget sequences), injects them into the system prompt, and closes the session.
+2. **Dynamic Server Discovery:** The gateway then calls `check_and_run_tools()`. The agent reads the system environment variables to resolve `PARTY_MCP_URL` (`http://127.0.0.1:8002/sse`).
+3. **Transport Handshake:** The agent opens an SSE connection using `sse_client(mcp_url)`, initializes a `ClientSession`, and performs the protocol handshake.
+4. **Dynamic Tool Registration:** The agent calls `list_tools()` over JSON-RPC. The Party MCP server returns the schemas for the 7 party tools (like `invite_guests`, `budget_expenses`, `book_venue`). The agent registers them dynamically in a local `tool_to_session` registry to route future tool calls to the correct session, and translates them to Ollama's tool-calling definitions.
 
 #### **Step 3: ReAct Reasoning Loop & Execution Trace (`agent.py`)**
 1. **Turn 1 (Invite Guests):** The agent queries Ollama. Ollama identifies that the user wants to invite Bob and Alice, requesting a call to `invite_guests(guest_names=['Bob', 'Alice'])`. The agent executes the tool over HTTP/SSE, which returns an RSVP count of 2.
