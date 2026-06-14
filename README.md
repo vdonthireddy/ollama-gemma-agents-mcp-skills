@@ -50,11 +50,13 @@ sequenceDiagram
     participant MCPServer as "MCP SSE Server (port 8001/8002)"
 
     Client->>App: POST /chat/stream with history & domain
-    App->>MCPServer: get_system_prompt() queries read_resource("skills://list")
+    Note over App: Reads target MCP URL from .env<br/>(e.g., TRAVEL_MCP_URL)
+    App->>MCPServer: Connects via SSE & reads resource "skills://list"
     MCPServer-->>App: Returns predefined pipelines & sequences
     Note over App: Compiles system prompt with skills context
     App->>Agent: check_and_run_tools(messages, model, domain)
-    Note over Agent: Connects to MCP SSE Server over HTTP/SSE
+    Note over Agent: Reads target MCP URL from .env<br/>(e.g., TRAVEL_MCP_URL)
+    Note over Agent: Connects to MCP SSE Server via SSE transport
     Agent->>MCPServer: list_tools()
     MCPServer-->>Agent: Returns active domain tools
     
@@ -412,7 +414,8 @@ sequenceDiagram
 
     UI->>App: POST /chat/stream {"messages": [{"role": "user", "content": "I want to book a flight from New York to Paris on 2026-08-10 and generate my itinerary."}], "domain": "travel"}
     App->>Agent: check_and_run_tools(...)
-    Note over Agent: Connects to Travel MCP SSE Server
+    Note over Agent: Reads TRAVEL_MCP_URL from .env
+    Note over Agent: Connects to Travel MCP SSE Server (port 8001)
     Agent->>MCPServer: list_tools()
     MCPServer-->>Agent: Returns travel tools [search_flights, book_flight, search_hotels, book_hotel, rent_car, book_attraction, generate_travel_itinerary]
     
@@ -471,9 +474,17 @@ The user selects the **Vacation Travel Planner** domain and enters the prompt. T
     ```
 
 #### **Step 2: Gateway Entry & Agent Call (`app.py` & `agent.py`)**
-1. The gateway endpoint `chat_stream` in `app.py` receives the payload and invokes `check_and_run_tools()`.
-2. The agent connects to the Travel MCP SSE Server at the configured endpoint (port `8001`).
-3. The agent calls `list_tools()` over the network session to discover the available travel planning tools and registers them.
+
+To connect to any tools, the agent must first discover and establish a session with the corresponding MCP server. Here is how the server exposure and agent discovery flow works:
+
+1. **Server Exposure (Registration):** The Travel and Party MCP servers run as independent, standalone processes (configured in `start.sh` and listening on ports `8001` and `8002` respectively). They expose themselves by registering their network URLs in the `.env` configuration file:
+   - `TRAVEL_MCP_URL=http://127.0.0.1:8001/sse`
+   - `PARTY_MCP_URL=http://127.0.0.1:8002/sse`
+2. **Discovery (Environment Lookup):** When the gateway receives a request (e.g. for `domain="travel"`), the agent does not connect blindly or hardcode the address. It looks up the system environment variables for keys matching `{domain.upper()}_MCP_URL`.
+   - If `domain="travel"`, it retrieves `TRAVEL_MCP_URL`.
+   - If `domain="all"` or `domain="unified"`, it dynamically iterates all environment keys ending with `_MCP_URL` to route calls to both servers.
+3. **Transport Connection & Handshake:** The agent invokes `check_and_run_tools()`, opening an asynchronous connection via Server-Sent Events (SSE) using the resolved server URL (e.g. `http://127.0.0.1:8001/sse`). It wraps the connection in an MCP `ClientSession` and completes the initialization handshake.
+4. **Dynamic Tool Registration:** The agent calls `list_tools()` over the session. The MCP server returns its list of available tools (schemas, descriptions, and parameter definitions). The agent then registers them locally under a `tool_to_session` router map, allowing it to route subsequent LLM tool calls to the correct server session.
 
 #### **Step 3: ReAct Reasoning Loop & Execution Trace (`agent.py`)**
 1. **Turn 1 (Search):** The agent queries Ollama. Ollama identifies that the user wants to book a flight but needs flight options first, returning a request to call `search_flights(origin='New York', destination='Paris', date='2026-08-10')`. The agent executes the tool over HTTP/SSE, which returns a list of flight choices (including `FL-101`).
@@ -502,7 +513,8 @@ sequenceDiagram
 
     UI->>App: POST /chat/stream {"messages": [{"role": "user", "content": "Invite Bob and Alice, compute the budget, and book venue Cozy Club for 15 guests."}], "domain": "party"}
     App->>Agent: check_and_run_tools(...)
-    Note over Agent: Connects to Party MCP SSE Server
+    Note over Agent: Reads PARTY_MCP_URL from .env
+    Note over Agent: Connects to Party MCP SSE Server (port 8002)
     Agent->>MCPServer: list_tools()
     MCPServer-->>Agent: Returns party tools [invite_guests, budget_expenses, book_venue, order_cake, hire_entertainment, buy_decorations, send_reminders]
     
