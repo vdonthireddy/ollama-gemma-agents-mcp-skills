@@ -2,7 +2,9 @@
 
 ![GemmaJnana Banner](./images/linkedin_banner_v5.png)
 
-A local development stack to download, serve, and interact with Google's **Gemma 2 (2B)** model using **Ollama** and an asynchronous **FastAPI** gateway. The package includes a multi-domain Model Context Protocol (MCP) server structure and a beautiful, fully animated chat playground UI.
+A **production-pattern reference implementation** demonstrating how to build multi-domain AI agent orchestration using Google's **Gemma 2 (2B)** model, **Ollama**, the **Model Context Protocol (MCP)**, and an asynchronous **FastAPI** gateway. The package includes a networked MCP server architecture with dynamic skill discovery, a ReAct reasoning loop, and a fully animated chat playground UI.
+
+> **Note:** This project demonstrates correct architectural patterns (MCP resources, ReAct loops, SSE streaming, multi-domain routing) with mock tool handlers. It is designed as an educational reference and portfolio showcase, not a production-deployed service. See [Production Considerations](#production-considerations) for what a full production deployment would require.
 
 ---
 
@@ -149,7 +151,7 @@ Before running the application, it is important to understand what this local ag
 | **Enforced Skill Sequences:** Strictly follows sequence pipelines defined in JSON (e.g. searching, booking, and itinerary generation in order). | **Real-world Bookings:** All bookings are mocked locally for testing safety. It does not spend real money or call live airline/hotel APIs. |
 | **Dynamic Data Passing:** Feeds output states from previous steps into subsequent calls (e.g., passing RSVP counts to budget calculation). | **Real-Time Inventory Access:** The toolset operates on simulated local catalogs; it does not query actual live commercial availability. |
 | **Interactive Domain Switching:** Automatically updates LLM instruction templates, loaded tools, and active skills when domain toggling. | **Dynamic Mid-Sequence Input:** Once a sequence starts, the agent executes it autonomously; it cannot pause to prompt you for decisions mid-flow. |
-| **Comprehensive Logging:** Formats execution tracer cards in the UI and records detailed step-by-step telemetry in local logs. | **Extremely Complex Logic:** Running a 4B parameter model locally is excellent for sequence orchestration, but it may occasionally deviate on highly complex reasoning. |
+| **Comprehensive Logging:** Formats execution tracer cards in the UI and records detailed step-by-step telemetry in local logs. | **Extremely Complex Logic:** Running a 2B parameter model locally is excellent for sequence orchestration, but it may occasionally deviate on highly complex reasoning. |
 
 ---
 
@@ -227,6 +229,23 @@ The backend FastAPI gateway runs at `http://127.0.0.1:8435`:
 *   `GET /skills?domain=...`: Retrieves predefined JSON skill pipelines for the specified domain dynamically from the MCP server resource.
 *   `POST /chat`: Simple non-streaming message response endpoint.
 *   `POST /chat/stream`: Initiates an SSE text stream event channel, sending live tracer cards for active tools.
+
+---
+
+## Production Considerations
+
+This project implements correct architectural **patterns** for agentic AI orchestration. To evolve it into a production-deployed enterprise service, the following operational infrastructure would be needed:
+
+| Area | Current State | Production Requirement |
+| :--- | :--- | :--- |
+| **Connection Lifecycle** | Fresh SSE/TCP connections opened per request | Connection pooling with persistent MCP sessions |
+| **Resilience** | No timeouts, retries, or circuit breakers | Timeouts on all external calls, retry with backoff, circuit breakers |
+| **Security** | Open CORS, no auth, no rate limiting | JWT/OAuth2 auth, RBAC, rate limiting, TLS, secrets vault |
+| **Scalability** | Single-process Uvicorn, `http.server` for UI | Multi-worker Gunicorn, Nginx for static files, Redis for shared state |
+| **Observability** | Custom text logger to local files | Structured JSON logs, OpenTelemetry traces, Prometheus metrics |
+| **Deployment** | Bash scripts (`start.sh` / `stop.sh`) | Docker Compose / Kubernetes, CI/CD pipelines, IaC |
+| **LLM Safety** | No input/output guardrails | Prompt injection protection, output filtering, token budget management |
+| **API Maturity** | No versioning, no pagination | API versioning (`/v1/`), pagination, request correlation IDs |
 
 ---
 
