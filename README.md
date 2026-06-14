@@ -18,9 +18,10 @@ Below is the visual flow of the GemmaJnana local multi-domain architecture.
 graph TD
     Client[Browser UI: index.html / Port 8080] -->|1. POST Request with Domain| Backend[FastAPI Gateway: app.py / Port 8435]
     Backend -->|2. Invoke check_and_run_tools| Agent[Agent Dispatcher: agent.py]
-    Agent -->|3. Spawn MCP Server Process| MCPServer[MCP Server: mcp_servers/<domain>/mcp_server_<domain>.py / stdio]
+    Agent -->|3a. Load JSON Skill Sequences| Skills[Skills Folder: mcp_servers/<domain>/skills/]
+    Agent -->|3b. Spawn MCP Server Process| MCPServer[MCP Server: mcp_servers/<domain>/mcp_server_<domain>.py / stdio]
     Agent -->|4. Discover Tools via list_tools| MCPServer
-    Agent -->|5. Tool-calling Query| Ollama[Ollama Server / Port 11434]
+    Agent -->|5. Tool-calling Query with Injected Skills| Ollama[Ollama Server / Port 11434]
     Ollama -->|6. Requested Tool Calls| Agent
     Agent -->|7a. Execute Tools via call_tool| MCPServer
     MCPServer -->|7b. Execute Domain Handlers| Tools[Domain Tools Submodule]
@@ -44,17 +45,21 @@ sequenceDiagram
     participant Client as "Browser Client"
     participant App as "app.py"
     participant Agent as "agent.py"
+    participant Skills as "Skills Directory (mcp_servers/<domain>/skills/)"
     participant Ollama as "Ollama Service"
     participant MCPServer as "MCP Server (mcp_servers/<domain>/mcp_server_*.py)"
 
     Client->>App: POST /chat/stream with history & domain
     App->>Agent: check_and_run_tools(messages, model, domain)
+    Agent->>Skills: Load JSON skill configurations
+    Skills-->>Agent: Return predefined pipelines & sequences
+    Note over Agent: Compiles dynamic system prompt with skills context
     Note over Agent: Spawns domain-specific MCP Server Subprocess
     Agent->>MCPServer: list_tools()
     MCPServer-->>Agent: Returns active domain tools
     
     loop ReAct Multi-Step Loop (up to 8 turns)
-        Agent->>Ollama: [LLM Call] ollama.chat with history + tool context
+        Agent->>Ollama: [LLM Call] ollama.chat with history + tool context + skills context
         Ollama-->>Agent: Returns tool_calls (or empty if finished)
         break If no more tool calls
             Note over Agent: Exit Loop
