@@ -16,25 +16,25 @@ Below is the visual flow of the GemmaJnana local multi-domain architecture.
 
 ```mermaid
 graph TD
-    Client[Browser UI: index.html / Port 8080] -->|1. POST Request with Domain| Backend[FastAPI Gateway: app.py / Port 8435]
-    Backend -->|2. Invoke check_and_run_tools| Agent[Agent Dispatcher: agent.py]
-    Agent -->|3a. Load JSON Skill Sequences| Skills[Skills Folder: mcp_servers/<domain>/skills/]
-    Agent -->|3b. Spawn MCP Server Process| MCPServer[MCP Server: mcp_servers/<domain>/mcp_server_<domain>.py / stdio]
-    Agent -->|4. Discover Tools via list_tools| MCPServer
-    Agent -->|5. Tool-calling Query with Injected Skills| Ollama[Ollama Server / Port 11434]
-    Ollama -->|6. Requested Tool Calls| Agent
-    Agent -->|7a. Execute Tools via call_tool| MCPServer
-    MCPServer -->|7b. Execute Domain Handlers| Tools[Domain Tools Submodule]
-    Tools -->|7c. Return Result JSON| MCPServer
-    MCPServer -->|7d. Tool Output JSON| Agent
-    Agent -->|7e. Yield Live Trace Events| Backend
-    Backend -->|7f. Stream Live Status Cards & Tracer JSON| Client
-    Agent -->|8a. Return Aggregated Tool Results| Backend
-    Agent -->|8b. Clean Up MCP Server Subprocess| MCPServer
-    Backend -->|9. Final Inference Query| Ollama
-    Ollama -->|10. Response Stream| Backend
-    Backend -->|11. Stream SSE Chat Chunks| Client
-    Ollama -.->|Load Model| Model[(Google Gemma 4 Model: gemma4:e4b)]
+    Client[Playground UI] -->|1. POST Request| Backend[FastAPI Gateway]
+    Backend -->|2. Run Agent| Agent[Agent Dispatcher]
+    Agent -->|3a. Load Skills| Skills[(JSON Skills)]
+    Agent -->|3b. Spawn MCP| MCPServer[MCP Server]
+    Agent -->|4. list_tools| MCPServer
+    Agent -->|5. Query LLM| Ollama[Ollama Server]
+    Ollama -->|6. Tool Calls| Agent
+    Agent -->|7a. call_tool| MCPServer
+    MCPServer -->|7b. Run Handler| Tools[Tools Submodule]
+    Tools -->|7c. JSON Result| MCPServer
+    MCPServer -->|7d. Tool Output| Agent
+    Agent -->|7e. Yield Trace| Backend
+    Backend -->|7f. SSE Cards| Client
+    Agent -->|8a. Final Results| Backend
+    Agent -->|8b. Terminate MCP| MCPServer
+    Backend -->|9. Final Query| Ollama
+    Ollama -->|10. Stream| Backend
+    Backend -->|11. SSE Chunks| Client
+    Ollama -.->|Load Model| Model[(Gemma 4)]
 ```
 
 ### Dynamic Agentic Pipeline Flow
