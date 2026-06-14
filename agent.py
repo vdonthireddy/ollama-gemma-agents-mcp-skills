@@ -16,10 +16,11 @@ from logger import log_info, log_error, get_session_log_file
 
 async def get_system_prompt(domain: str = "travel") -> str:
     """
-    Load dynamic skills dynamically by connecting to active MCP servers
-    and querying the `skills://list` resource.
+    Load dynamic skills and tools dynamically by connecting to active MCP servers
+    and querying their resources and registered tools.
     """
     skills_list = []
+    discovered_tools = []
     
     # Resolve target MCP server URLs based on domain parameter
     urls = []
@@ -33,22 +34,58 @@ async def get_system_prompt(domain: str = "travel") -> str:
         if val:
             urls.append((domain.lower(), val))
             
-    # Connect and read resource
+    # Connect and fetch skills & tools
     for name, mcp_url in urls:
         try:
             async with sse_client(mcp_url) as (read, write):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
-                    res = await session.read_resource("skills://list")
-                    if res and res.contents:
-                        for content in res.contents:
-                            if hasattr(content, "text") and content.text:
-                                loaded_skills = json.loads(content.text)
-                                if isinstance(loaded_skills, list):
-                                    skills_list.extend(loaded_skills)
+                    
+                    # 1. Fetch skills resource
+                    try:
+                        res = await session.read_resource("skills://list")
+                        if res and res.contents:
+                            for content in res.contents:
+                                if hasattr(content, "text") and content.text:
+                                    loaded_skills = json.loads(content.text)
+                                    if isinstance(loaded_skills, list):
+                                        skills_list.extend(loaded_skills)
+                    except Exception as re:
+                        log_error("system", f"Failed to fetch skills from MCP server '{name}': {re}")
+                        
+                    # 2. Fetch tools list
+                    try:
+                        tools_res = await session.list_tools()
+                        for t in tools_res.tools:
+                            discovered_tools.append((name, t))
+                    except Exception as te:
+                        log_error("system", f"Failed to list tools from MCP server '{name}': {te}")
+                        
         except Exception as e:
-            log_error("system", f"Failed to fetch skills from MCP server '{name}' at {mcp_url}: {e}")
+            log_error("system", f"Failed to connect to MCP server '{name}' at {mcp_url}: {e}")
 
+    # Build tools instruction dynamically
+    tools_by_domain = {}
+    for server_name, tool in discovered_tools:
+        domain_name = server_name.upper()
+        if domain_name not in tools_by_domain:
+            tools_by_domain[domain_name] = []
+        tools_by_domain[domain_name].append(tool)
+
+    tools_instruction = ""
+    if discovered_tools:
+        tools_instruction = f"You have access to {len(discovered_tools)} tool(s):\n\n"
+        for domain_name, tools in tools_by_domain.items():
+            tools_instruction += f"--- {domain_name} Planning Tools ---\n"
+            for i, tool in enumerate(tools, 1):
+                props = tool.inputSchema.get("properties", {}) if isinstance(tool.inputSchema, dict) else {}
+                args = ", ".join(props.keys())
+                tools_instruction += f"{i}. `{tool.name}({args})`: {tool.description}\n"
+            tools_instruction += "\n"
+    else:
+        tools_instruction = "No tools loaded.\n\n"
+
+    # Build skills instruction dynamically
     skills_instruction = ""
     if skills_list:
         skills_instruction = "Available Skills (Predefined tool sequences):\n"
@@ -60,34 +97,19 @@ async def get_system_prompt(domain: str = "travel") -> str:
                 f"  Instructions: {skill['instructions']}\n\n"
             )
     else:
-        skills_instruction = "No skills loaded."
+        skills_instruction = "No skills loaded.\n\n"
 
+    connected_domains = " and ".join([d.capitalize() for d, _ in urls]) if urls else "configured"
     system_prompt = (
-        "You are an expert Unified AI Assistant that orchestrates planning workflows across multiple domains (Vacation Travel and Birthday Party planning) using local tools.\n"
+        f"You are an expert Unified AI Assistant that orchestrates planning workflows across the {connected_domains} domain(s) using local tools.\n"
         "Depending on the user's request, dynamically select the appropriate tools and follow any matching predefined skill sequences.\n\n"
-        "You have access to 14 tools:\n\n"
-        "--- Travel Planning Tools ---\n"
-        "1. `search_flights(origin, destination, date)`: Searches flight options and pricing.\n"
-        "2. `book_flight(flight_id)`: Reserves a flight ticket and returns a confirmation code.\n"
-        "3. `search_hotels(city, budget)`: Finds nearby hotel options and ratings.\n"
-        "4. `book_hotel(hotel_name, nights)`: Reserves hotel rooms.\n"
-        "5. `rent_car(city, car_type)`: Books a rental car (SUV, sedan, etc.).\n"
-        "6. `book_attraction(city, activity)`: Reserves tickets for local tours or attractions.\n"
-        "7. `generate_travel_itinerary(bookings)`: Compiles a list of bookings into a formatted itinerary document.\n\n"
-        "--- Birthday Party Planning Tools ---\n"
-        "8. `invite_guests(guest_names)`: Sends invitations and returns RSVP count.\n"
-        "9. `budget_expenses(rsvp_count)`: Estimates venue, food, and decoration costs.\n"
-        "10. `book_venue(venue_name, guest_count)`: Reserves the party venue space.\n"
-        "11. `order_cake(flavor, size, inscription)`: Orders a custom birthday cake.\n"
-        "12. `hire_entertainment(type)`: Books Magician/DJ/Photobooth entertainment.\n"
-        "13. `buy_decorations(theme)`: Purchases themed decorations (streamers, balloons).\n"
-        "14. `send_reminders(guest_emails, location)`: Sends final reminder messages to guests.\n\n"
+        f"{tools_instruction}"
         f"{skills_instruction}"
         "CRITICAL EXECUTION RULES:\n"
-        "1. When the user requests a pipeline/skill (e.g. Core Event Planning, Invitation & Budget, Flight Booking, Accommodation & Ground, or Full Vacation), you MUST execute the tools in the EXACT sequence specified. Do NOT skip any steps, and do NOT call tools out of order.\n"
-        "2. Feed the outputs from previous steps as inputs to subsequent steps (e.g., pass the 'rsvp_count' returned by invite_guests to budget_expenses; pass the flight booking object to generate_travel_itinerary).\n"
+        "1. When the user requests a pipeline/skill, you MUST execute the tools in the EXACT sequence specified. Do NOT skip any steps, and do NOT call tools out of order.\n"
+        "2. Feed the outputs from previous steps as inputs to subsequent steps.\n"
         "3. Execute only ONE tool at a time. Wait for the tool result before initiating the next call.\n"
-        "4. Once the sequence is finished, write a final summary detailing the success of each tool step and reporting the final travel or event plan."
+        "4. Once the sequence is finished, write a final summary detailing the success of each tool step and reporting the final plan."
     )
     return system_prompt
 
