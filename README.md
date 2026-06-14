@@ -120,6 +120,19 @@ Equips the AI assistant to manage invitations, budget estimations, venue schedul
 
 ---
 
+## Agent Capabilities & Limitations
+
+Before running the application, it is important to understand what this local agentic stack is capable of and its current boundaries:
+
+| What the Agent CAN Do | What the Agent CANNOT Do |
+| :--- | :--- |
+| **Enforced Skill Sequences:** Strictly follows sequence pipelines defined in JSON (e.g. searching, booking, and itinerary generation in order). | **Real-world Bookings:** All bookings are mocked locally for testing safety. It does not spend real money or call live airline/hotel APIs. |
+| **Dynamic Data Passing:** Feeds output states from previous steps into subsequent calls (e.g., passing RSVP counts to budget calculation). | **Real-Time Inventory Access:** The toolset operates on simulated local catalogs; it does not query actual live commercial availability. |
+| **Interactive Domain Switching:** Automatically updates LLM instruction templates, loaded tools, and active skills when domain toggling. | **Dynamic Mid-Sequence Input:** Once a sequence starts, the agent executes it autonomously; it cannot pause to prompt you for decisions mid-flow. |
+| **Comprehensive Logging:** Formats execution tracer cards in the UI and records detailed step-by-step telemetry in local logs. | **Extremely Complex Logic:** Running a 4B parameter model locally is excellent for sequence orchestration, but it may occasionally deviate on highly complex reasoning. |
+
+---
+
 ## File Structure
 
 ```text
