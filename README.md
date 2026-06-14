@@ -6,6 +6,36 @@ A **production-pattern reference implementation** demonstrating how to build mul
 
 > **Note:** This project demonstrates correct architectural patterns (MCP resources, ReAct loops, SSE streaming, multi-domain routing) with mock tool handlers. It is designed as an educational reference and portfolio showcase, not a production-deployed service. See [Enterprise Assessment](#enterprise-assessment) for what a full production deployment would require.
 
+## Table of Contents
+- [Project Architecture Flow](#project-architecture-flow)
+  - [Data Flow Diagram](#data-flow-diagram)
+  - [Dynamic Agentic Pipeline Flow](#dynamic-agentic-pipeline-flow)
+- [Dynamic Routing Design Patterns](#dynamic-routing-design-patterns-automated-domain-switching)
+  - [Pattern 1: Intent Classification (Two-Pass Routing)](#pattern-1-intent-classification-two-pass-routing)
+  - [Pattern 2: Unified Multi-MCP Router (Single-Pass Agent)](#pattern-2-unified-multi-mcp-router-single-pass-agent---implemented-in-this-project)
+- [Domain Architecture Overview](#domain-architecture-overview)
+  - [Vacation Travel Planner](#1-vacation-travel-planner-mcp_serverstravel)
+  - [Birthday Party Planner](#2-birthday-party-planner-mcp_serversparty)
+- [Agent Capabilities & Limitations](#agent-capabilities--limitations)
+- [File Structure](#file-structure)
+- [Prerequisites](#prerequisites)
+- [How to Run](#how-to-run)
+- [Running Unit Tests](#running-unit-tests)
+- [API Reference](#api-reference)
+- [Enterprise Assessment](#enterprise-assessment)
+  - [Production Readiness Summary](#summary)
+  - [1. Connection Lifecycle](#1-connection-lifecycle--critical)
+  - [2. Resilience](#2-resilience--critical)
+  - [3. Security](#3-security--critical)
+  - [4. Scalability](#4-scalability--critical)
+  - [5. Observability](#5-observability--high)
+  - [6. Deployment](#6-deployment--high)
+  - [7. LLM Safety](#7-llm-safety--high)
+  - [8. Production Architecture Target](#8-production-architecture-target)
+- [Step-by-Step Code Execution Trace](#step-by-step-code-execution-trace-debugging-walkthrough)
+  - [Scenario A: Vacation Flight Booking (Travel Domain)](#scenario-a-vacation-flight-booking-travel-domain)
+  - [Scenario B: Party Setup & Venue Booking (Party Domain)](#scenario-b-party-setup--venue-booking-party-domain)
+
 ---
 
 ## Project Architecture Flow
