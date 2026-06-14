@@ -11,6 +11,7 @@ A **production-pattern reference implementation** demonstrating how to build mul
   - [Data Flow Diagram](#data-flow-diagram)
   - [Dynamic Agentic Pipeline Flow](#dynamic-agentic-pipeline-flow)
   - [Dynamic Skills & Tools Discovery Mechanics](#dynamic-skills--tools-discovery-mechanics)
+  - [Key Terminology & Concepts](#key-terminology--concepts)
 - [Dynamic Routing Design Patterns](#dynamic-routing-design-patterns-automated-domain-switching)
   - [Pattern 1: Intent Classification (Two-Pass Routing)](#pattern-1-intent-classification-two-pass-routing)
   - [Pattern 2: Unified Multi-MCP Router (Single-Pass Agent)](#pattern-2-unified-multi-mcp-router-single-pass-agent---implemented-in-this-project)
@@ -135,6 +136,18 @@ To establish complete decoupling between the orchestration agent and the domain-
   ```
 * **Binding**: The agent registers the returned schemas in a local `tool_to_session` mapping. This router matches the requested function name to the corresponding active SSE server session when the LLM makes a tool call.
 * **Awareness**: The tool schemas are converted into Ollama's tool configuration format and passed to the model on each reasoning turn (`client.chat(tools=...)`).
+### Key Terminology & Concepts
+
+To help understand the architecture of this project, here is a glossary of the key technologies and design patterns used:
+
+* **Model Context Protocol (MCP)**: An open-standard specification created by Anthropic. It standardizes how client agents (like the Gateway) communicate with external data sources, prompts, and tool servers over a structured protocol.
+* **Server-Sent Events (SSE)**: A lightweight, unidirectional web technology standard (part of HTML5) that allows a server to push real-time events asynchronously to a client over a persistent HTTP connection. In this project, SSE is used for:
+  1. **MCP SSE Transport**: Connecting the client orchestrator to the MCP servers on ports `8001` and `8002` (where the client posts JSON-RPC payloads, and the server pushes event states).
+  2. **Gateway SSE Streaming**: Streaming the dynamic agent execution trace cards (Connecting ➔ Discovered ➔ Thought ➔ Calling Tool ➔ Result) directly to the browser playground in real-time.
+* **JSON-RPC**: A stateless, lightweight Remote Procedure Call (RPC) protocol encoded in JSON. It serves as the standard message format for the MCP specification (e.g. `tools/list`, `tools/call`, `resources/read`).
+* **ReAct (Reasoning & Acting)**: An agentic loop pattern that interleaves reasoning thoughts ("what should I do next?") with active executions ("call tool X") in sequential steps to resolve user prompts.
+* **FastMCP**: A high-level Python SDK that sits on top of the base `mcp` library, making it extremely easy to declare tools (`@mcp.tool()`) and resources (`@mcp.resource()`) with automatic schema extraction from Python type hints and docstrings.
+* **MCP Resources**: A standard MCP capability enabling servers to expose static or dynamic read-only data (using URI schemes like `skills://list`) to client agents.
 
 ---
 
