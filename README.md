@@ -445,6 +445,10 @@ sequenceDiagram
 
     Note over App,MCPServer: [Step 0] Setup: Travel MCP server starts on port 8001 and registers URL in .env
     UI->>App: POST /chat/stream {"messages": [{"role": "user", "content": "I want to book a flight from New York to Paris on 2026-08-10 and generate my itinerary."}], "domain": "travel"}
+    Note over App: Reads TRAVEL_MCP_URL from .env
+    App->>MCPServer: Connects & reads resource "skills://list"
+    MCPServer-->>App: Returns travel JSON skills
+    Note over App: Compiles system prompt with skills context
     App->>Agent: check_and_run_tools(...)
     Note over Agent: Reads TRAVEL_MCP_URL from .env
     Note over Agent: Connects to Travel MCP SSE Server (port 8001)
@@ -546,6 +550,10 @@ sequenceDiagram
 
     Note over App,MCPServer: [Step 0] Setup: Party MCP server starts on port 8002 and registers URL in .env
     UI->>App: POST /chat/stream {"messages": [{"role": "user", "content": "Invite Bob and Alice, compute the budget, and book venue Cozy Club for 15 guests."}], "domain": "party"}
+    Note over App: Reads PARTY_MCP_URL from .env
+    App->>MCPServer: Connects & reads resource "skills://list"
+    MCPServer-->>App: Returns party JSON skills
+    Note over App: Compiles system prompt with skills context
     App->>Agent: check_and_run_tools(...)
     Note over Agent: Reads PARTY_MCP_URL from .env
     Note over Agent: Connects to Party MCP SSE Server (port 8002)
