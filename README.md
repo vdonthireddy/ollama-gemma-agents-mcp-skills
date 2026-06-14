@@ -22,16 +22,17 @@ graph TD
     Agent -->|4. Discover Tools via list_tools| MCPServer
     Agent -->|5. Tool-calling Query| Ollama[Ollama Server / Port 11434]
     Ollama -->|6. Requested Tool Calls| Agent
-    Agent -->|7. Execute Tools via call_tool| MCPServer
-    MCPServer -->|Execute Domain Handlers| Tools[Domain Tools Submodule]
-    Tools -->|Return Result JSON| MCPServer
-    MCPServer -->|Tool Output JSON| Agent
-    Agent -->|8. Yield Live Trace Events| Backend
-    Backend -->|9. Stream Live Status Cards & Tracer JSON| Client
-    Agent -->|10. Return Aggregated Tool Results| Backend
-    Backend -->|11. Final Inference Query| Ollama
-    Ollama -->|12. Response Stream| Backend
-    Backend -->|13. Stream SSE Chat Chunks| Client
+    Agent -->|7a. Execute Tools via call_tool| MCPServer
+    MCPServer -->|7b. Execute Domain Handlers| Tools[Domain Tools Submodule]
+    Tools -->|7c. Return Result JSON| MCPServer
+    MCPServer -->|7d. Tool Output JSON| Agent
+    Agent -->|7e. Yield Live Trace Events| Backend
+    Backend -->|7f. Stream Live Status Cards & Tracer JSON| Client
+    Agent -->|8a. Return Aggregated Tool Results| Backend
+    Agent -->|8b. Clean Up MCP Server Subprocess| MCPServer
+    Backend -->|9. Final Inference Query| Ollama
+    Ollama -->|10. Response Stream| Backend
+    Backend -->|11. Stream SSE Chat Chunks| Client
     Ollama -.->|Load Model| Model[(Google Gemma 4 Model: gemma4:e4b)]
 ```
 
