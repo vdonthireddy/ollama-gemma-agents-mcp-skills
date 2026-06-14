@@ -26,11 +26,12 @@ graph TD
     MCPServer -->|Execute Domain Handlers| Tools[Domain Tools Submodule]
     Tools -->|Return Result JSON| MCPServer
     MCPServer -->|Tool Output JSON| Agent
-    Agent -->|8. Return Tool Messages & Results| Backend
-    Backend -->|9. Stream Live Status Cards| Client
-    Backend -->|10. Final Inference Query| Ollama
-    Ollama -->|11. Response Stream| Backend
-    Backend -->|12. Stream SSE Chat Chunks| Client
+    Agent -->|8. Yield Live Trace Events| Backend
+    Backend -->|9. Stream Live Status Cards & Tracer JSON| Client
+    Agent -->|10. Return Aggregated Tool Results| Backend
+    Backend -->|11. Final Inference Query| Ollama
+    Ollama -->|12. Response Stream| Backend
+    Backend -->|13. Stream SSE Chat Chunks| Client
     Ollama -.->|Load Model| Model[(Google Gemma 4 Model: gemma4:e4b)]
 ```
 
@@ -57,8 +58,12 @@ sequenceDiagram
         break If no more tool calls
             Note over Agent: Exit Loop
         end
+        Agent-->>App: Yield status event (Spawning/Reasoning/Thought)
+        App-->>Client: Stream SSE trace update (UI Pulsing/Thought card)
         Agent->>MCPServer: call_tool(name, arguments)
         MCPServer-->>Agent: Returns tool results (JSON string)
+        Agent-->>App: Yield status event (Tool execution result)
+        App-->>Client: Stream SSE trace update (UI tool result card)
         Note over Agent: Append tool results to message context
     end
     
@@ -66,7 +71,7 @@ sequenceDiagram
     Note over Agent: Cleans up MCP Server Subprocess
     App->>Ollama: [LLM Call] Stream final chat response (with complete tool context)
     Ollama-->>App: Stream response chunks
-    App-->>Client: Stream SSE content (with citational source states)
+    App-->>Client: Stream SSE chat chunks
 ```
 
 ---
