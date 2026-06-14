@@ -2,8 +2,8 @@ import os
 import sys
 import json
 import ollama
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import ClientSession
+from mcp.client.sse import sse_client
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -79,26 +79,14 @@ def get_system_prompt(domain: str = "travel") -> str:
 
 async def get_mcp_tools(domain: str = "travel", session_name: str = "health") -> list:
     """
-    Connects to the MCP server subprocess temporarily to retrieve list of active tools.
+    Connects to the network MCP server temporarily to retrieve list of active tools.
     """
-    log_filepath = get_session_log_file(session_name)
-    mcp_script = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "mcp_servers",
-        domain,
-        f"mcp_server_{domain}.py"
-    )
-    server_params = StdioServerParameters(
-        command=sys.executable,
-        args=[mcp_script],
-        env={
-            **os.environ,
-            "SESSION_NAME": session_name,
-            "SESSION_LOG_FILE": log_filepath
-        }
-    )
+    mcp_url = os.getenv("PARTY_MCP_URL") if domain == "party" else os.getenv("TRAVEL_MCP_URL")
+    if not mcp_url:
+        log_error(session_name, f"Error: No URL configured for domain {domain}")
+        return []
     try:
-        async with stdio_client(server_params) as (read, write):
+        async with sse_client(mcp_url) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 mcp_tools_res = await session.list_tools()
@@ -116,7 +104,7 @@ async def get_mcp_tools(domain: str = "travel", session_name: str = "health") ->
 async def check_and_run_tools(messages: list, model_name: str, domain: str = "travel", session_name: str = "default"):
     """
     Checks if the model requests any tool calls in a loop (up to 8 steps) to support sequential/multi-step reasoning.
-    Exposes and executes tools dynamically using a subprocess Model Context Protocol (MCP) server.
+    Exposes and executes tools dynamically using an HTTP/SSE network Model Context Protocol (MCP) server.
     Yields trace events during execution, ending with the final compiled tool result state.
     """
     tool_messages = []
@@ -124,28 +112,17 @@ async def check_and_run_tools(messages: list, model_name: str, domain: str = "tr
     llm_calls = 0
     current_messages = list(messages)
     
-    log_filepath = get_session_log_file(session_name)
-    mcp_script = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "mcp_servers",
-        domain,
-        f"mcp_server_{domain}.py"
-    )
-    server_params = StdioServerParameters(
-        command=sys.executable,
-        args=[mcp_script],
-        env={
-            **os.environ,
-            "SESSION_NAME": session_name,
-            "SESSION_LOG_FILE": log_filepath
-        }
-    )
+    mcp_url = os.getenv("PARTY_MCP_URL") if domain == "party" else os.getenv("TRAVEL_MCP_URL")
+    if not mcp_url:
+        log_error(session_name, f"Error: No URL configured for domain {domain}")
+        yield {"type": "status", "status": "error", "message": f"No URL configured for domain {domain}"}
+        return
     
     try:
-        log_info(session_name, f"Spawning {os.path.basename(mcp_script)} subprocess...")
-        yield {"type": "status", "status": "spawning", "message": f"Spawning {os.path.basename(mcp_script)} subprocess..."}
+        log_info(session_name, f"Connecting to MCP server at {mcp_url}...")
+        yield {"type": "status", "status": "connecting", "message": f"Connecting to MCP server at {mcp_url}..."}
         
-        async with stdio_client(server_params) as (read, write):
+        async with sse_client(mcp_url) as (read, write):
             async with ClientSession(read, write) as session:
                 log_info(session_name, "Initializing MCP Client Session...")
                 yield {"type": "status", "status": "initializing", "message": "Initializing MCP Client Session..."}

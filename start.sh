@@ -32,12 +32,12 @@ else
     if [ "$LOCAL_VERSION" = "0.0.0" ]; then
         echo -e "${YELLOW}Ollama not installed. Installing version $LATEST_VERSION...${NC}"
     elif [ $COMPARE_RESULT -eq 2 ]; then
-        echo -e "${YELLOW}Newer version available (Local: $LOCAL_VERSION, Latest: $LATEST_VERSION). Updating...${NC}"
+        echo -e "${YELLOW}Newer version available (Local: $LOCAL_VERSION, Latest: $LATEST_VERSION). Skipping automatic update to avoid network delays.${NC}"
     else
         echo -e "${GREEN}Ollama is up-to-date (Version: $LOCAL_VERSION).${NC}"
     fi
 
-    if [ "$LOCAL_VERSION" = "0.0.0" ] || [ $COMPARE_RESULT -eq 2 ]; then
+    if [ "$LOCAL_VERSION" = "0.0.0" ]; then
         TEMP_DIR="./temp_ollama"
         mkdir -p "$TEMP_DIR"
         
@@ -112,10 +112,12 @@ else
     echo -e "${GREEN}gemma4:e4b is already downloaded.${NC}"
 fi
 
-# 4. Start the FastAPI Gateway in the background
+# 4. Start the FastAPI Gateway and MCP Servers in the background
 if [ -f "app.py" ]; then
     cleanup() {
-        echo -e "\n${YELLOW}Shutting down FastAPI Gateway...${NC}"
+        echo -e "\n${YELLOW}Shutting down Gateway and MCP Servers...${NC}"
+        [ ! -z "$TRAVEL_PID" ] && kill "$TRAVEL_PID" 2>/dev/null
+        [ ! -z "$PARTY_PID" ] && kill "$PARTY_PID" 2>/dev/null
         [ ! -z "$FASTAPI_PID" ] && kill "$FASTAPI_PID" 2>/dev/null
         exit 0
     }
@@ -131,15 +133,31 @@ if [ -f "app.py" ]; then
         echo -e "${GREEN}Python dependencies are up-to-date.${NC}"
     fi
 
+    # Start Travel MCP Server
+    echo -e "\n${YELLOW}Starting Travel MCP SSE Server (port 8001)...${NC}"
+    python3 mcp_servers/travel/mcp_server_travel.py > /dev/null 2>&1 &
+    TRAVEL_PID=$!
+
+    # Start Party MCP Server
+    echo -e "\n${YELLOW}Starting Party MCP SSE Server (port 8002)...${NC}"
+    python3 mcp_servers/party/mcp_server_party.py > /dev/null 2>&1 &
+    PARTY_PID=$!
+
     echo -e "\n${YELLOW}Starting FastAPI Gateway Server (port 8435)...${NC}"
     python3 app.py > /dev/null 2>&1 &
     FASTAPI_PID=$!
     
     sleep 2
+    if ! ps -p $TRAVEL_PID > /dev/null; then
+        echo -e "${RED}Error: Travel MCP Server failed to start.${NC}"
+    fi
+    if ! ps -p $PARTY_PID > /dev/null; then
+        echo -e "${RED}Error: Party MCP Server failed to start.${NC}"
+    fi
     if ! ps -p $FASTAPI_PID > /dev/null; then
         echo -e "${RED}Error: FastAPI Gateway failed to start.${NC}"
     else
-        echo -e "${GREEN}FastAPI Gateway is running (PID: $FASTAPI_PID).${NC}"
+        echo -e "${GREEN}Services are running (Gateway PID: $FASTAPI_PID, Travel PID: $TRAVEL_PID, Party PID: $PARTY_PID).${NC}"
     fi
 fi
 

@@ -15,7 +15,14 @@ echo -e "${BLUE}=== Stopping GemmaJnana Stack ===${NC}\n"
 echo -e "${YELLOW}Stopping lightweight HTTP Web Server (port 8080)...${NC}"
 pkill -f "http.server 8080" && echo -e "${GREEN}Web server stopped.${NC}" || echo -e "Web server was not running."
 
-# 2. Stop FastAPI API Gateway
+# 2. Stop Travel and Party MCP SSE Servers
+echo -e "${YELLOW}Stopping Travel MCP SSE Server (port 8001)...${NC}"
+pkill -f "mcp_servers/travel/mcp_server_travel.py" && echo -e "${GREEN}Travel MCP server stopped.${NC}" || echo -e "Travel MCP server was not running."
+
+echo -e "${YELLOW}Stopping Party MCP SSE Server (port 8002)...${NC}"
+pkill -f "mcp_servers/party/mcp_server_party.py" && echo -e "${GREEN}Party MCP server stopped.${NC}" || echo -e "Party MCP server was not running."
+
+# 3. Stop FastAPI API Gateway
 echo -e "${YELLOW}Stopping FastAPI Gateway (port 8435)...${NC}"
 pkill -f "app.py" && echo -e "${GREEN}FastAPI Gateway stopped.${NC}" || echo -e "FastAPI Gateway was not running."
 

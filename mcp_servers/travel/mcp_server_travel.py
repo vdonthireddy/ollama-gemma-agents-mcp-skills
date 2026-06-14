@@ -69,4 +69,7 @@ def generate_travel_itinerary(bookings: list) -> str:
     return json.dumps(result)
 
 if __name__ == "__main__":
-    mcp.run()
+    import os
+    host = os.getenv("TRAVEL_MCP_HOST", "127.0.0.1")
+    port = int(os.getenv("TRAVEL_MCP_PORT", "8001"))
+    mcp.run(transport="sse", host=host, port=port)

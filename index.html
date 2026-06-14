@@ -1178,7 +1178,7 @@
                 <h3>🧰 MCP Tools</h3>
                 <span class="mcp-badge connected" id="mcp-badge">
                     <span class="pulse-dot"></span>
-                    Connected via stdio
+                    Connected via SSE
                 </span>
             </div>
             <div class="tools-list" id="tools-list" style="max-height: 40%; overflow-y: auto;">
@@ -1352,6 +1352,13 @@
                 const res = await fetch(`${API_BASE}/tools?domain=${activeDomain}`);
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const tools = await res.json();
+                
+                const badge = document.getElementById('mcp-badge');
+                if (badge) {
+                    badge.className = 'mcp-badge connected';
+                    badge.innerHTML = '<span class="pulse-dot"></span> Connected via SSE';
+                }
+                
                 listEl.innerHTML = '';
                 if (!tools.length) {
                     listEl.innerHTML = '<div class="sidebar-empty">No tools discovered.</div>';

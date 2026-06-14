@@ -69,4 +69,7 @@ def send_reminders(guest_emails: list, location: str) -> str:
     return json.dumps(result)
 
 if __name__ == "__main__":
-    mcp.run()
+    import os
+    host = os.getenv("PARTY_MCP_HOST", "127.0.0.1")
+    port = int(os.getenv("PARTY_MCP_PORT", "8002"))
+    mcp.run(transport="sse", host=host, port=port)
