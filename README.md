@@ -49,6 +49,7 @@ sequenceDiagram
     participant Ollama as "Ollama Service"
     participant MCPServer as "MCP SSE Server (port 8001/8002)"
 
+    Note over App,MCPServer: [Step 0] Setup: MCP servers start and write endpoints (ports 8001/8002) to .env
     Client->>App: POST /chat/stream with history & domain
     Note over App: Reads target MCP URL from .env<br/>(e.g., TRAVEL_MCP_URL)
     App->>MCPServer: Connects via SSE & reads resource "skills://list"
@@ -412,6 +413,7 @@ sequenceDiagram
     participant MCPServer as "Travel MCP SSE Server (port 8001)"
     participant Ollama as "Ollama Service"
 
+    Note over App,MCPServer: [Step 0] Setup: Travel MCP server starts on port 8001 and registers URL in .env
     UI->>App: POST /chat/stream {"messages": [{"role": "user", "content": "I want to book a flight from New York to Paris on 2026-08-10 and generate my itinerary."}], "domain": "travel"}
     App->>Agent: check_and_run_tools(...)
     Note over Agent: Reads TRAVEL_MCP_URL from .env
@@ -512,6 +514,7 @@ sequenceDiagram
     participant MCPServer as "Party MCP SSE Server (port 8002)"
     participant Ollama as "Ollama Service"
 
+    Note over App,MCPServer: [Step 0] Setup: Party MCP server starts on port 8002 and registers URL in .env
     UI->>App: POST /chat/stream {"messages": [{"role": "user", "content": "Invite Bob and Alice, compute the budget, and book venue Cozy Club for 15 guests."}], "domain": "party"}
     App->>Agent: check_and_run_tools(...)
     Note over Agent: Reads PARTY_MCP_URL from .env
@@ -559,6 +562,44 @@ sequenceDiagram
     Ollama-->>App: Stream response chunks
     App-->>UI: Stream final SSE chat chunks
 ```
+
+#### **Step 0: Server Setup & Configuration (Pre-request Setup)**
+Before any user request is made, the MCP servers must expose themselves to the gateway:
+1. **Service Execution:** The Vacation Travel Planner and Birthday Party Planner MCP servers are launched as separate, standalone processes (listening on ports `8001` and `8002` respectively).
+2. **Server Exposure:** The servers register their respective SSE connection endpoints within the shared `.env` file:
+   - `TRAVEL_MCP_URL=http://127.0.0.1:8001/sse`
+   - `PARTY_MCP_URL=http://127.0.0.1:8002/sse`
+This acts as the local service registry that the agent reads at runtime to locate available servers.
+
+#### **Step 1: Frontend Request**
+The user selects the **Birthday Party Planner** domain and enters the prompt. The browser client (`index.html`) issues an HTTP `POST` request to `/chat/stream` with the conversation history and active domain:
+*   **Payload:**
+    ```json
+    {
+      "messages": [
+        {"role": "user", "content": "Invite Bob and Alice, compute the budget, and book venue Cozy Club for 15 guests."}
+      ],
+      "domain": "party",
+      "session_name": "default"
+    }
+    ```
+
+#### **Step 2: Gateway Entry & Agent Call (`app.py` & `agent.py`)**
+1. **Gateway Call:** The gateway endpoint `chat_stream` in `app.py` receives the payload and invokes `check_and_run_tools()`.
+2. **Dynamic Server Discovery:** The agent does not hardcode server endpoints. Instead, it inspects the system environment variables loaded from the `.env` file, looking up the key matching `{domain.upper()}_MCP_URL` (e.g. `PARTY_MCP_URL`). If `domain="all"` or `domain="unified"`, it dynamically iterates all keys ending in `_MCP_URL`.
+3. **Transport Handshake:** The agent connects to the resolved SSE URL (e.g., `http://127.0.0.1:8002/sse`) using the Server-Sent Events standard transport (`sse_client`), initializes an MCP `ClientSession`, and performs the initial protocol handshake.
+4. **Dynamic Tool Registration:** The agent invokes `list_tools()` over the network session. The MCP server returns its supported tool schemas (such as `invite_guests`, `budget_expenses`, `book_venue`). The agent registers them dynamically in a local `tool_to_session` router map to handle subsequent LLM tool calls.
+
+#### **Step 3: ReAct Reasoning Loop & Execution Trace (`agent.py`)**
+1. **Turn 1 (Invite Guests):** The agent queries Ollama. Ollama identifies that the user wants to invite Bob and Alice, requesting a call to `invite_guests(guest_names=['Bob', 'Alice'])`. The agent executes the tool over HTTP/SSE, which returns an RSVP count of 2.
+2. **Turn 2 (Compute Budget):** The agent queries Ollama with the RSVP update. Ollama selects the `budget_expenses(rsvp_count=2)` tool. The agent executes this tool and receives a budget cost calculation of $80.
+3. **Turn 3 (Book Venue):** The agent queries Ollama with the budget details. Ollama notices that the user also requested booking the venue "Cozy Club" for 15 guests, and invokes `book_venue(venue_name='Cozy Club', guest_count=15)`. The agent runs this tool and receives the reservation confirmation code (`VNU-J4YJRH`).
+4. **Turn 4 (Finished):** The agent queries Ollama one final time, which returns no further tool calls.
+
+#### **Step 4: Cleanup & Final Inference (`app.py`)**
+1. The agent closes the active network connection to the party MCP SSE server.
+2. The gateway appends the tool messages history to the conversation list and requests the final streaming inference from Ollama.
+3. Ollama generates a friendly conversational summary containing the invitation stats, budget estimate, and venue booking details, which streams directly to the frontend.
 
 #### **Step-by-Step Execution Log Trace (As-Is from Logger)**
 
