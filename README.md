@@ -4,7 +4,7 @@
 
 A **production-pattern reference implementation** demonstrating how to build multi-domain AI agent orchestration using Google's **Gemma 2 (2B)** model, **Ollama**, the **Model Context Protocol (MCP)**, and an asynchronous **FastAPI** gateway. The package includes a networked MCP server architecture with dynamic skill discovery, a ReAct reasoning loop, and a fully animated chat playground UI.
 
-> **Note:** This project demonstrates correct architectural patterns (MCP resources, ReAct loops, SSE streaming, multi-domain routing) with mock tool handlers. It is designed as an educational reference and portfolio showcase, not a production-deployed service. See [Production Considerations](#production-considerations) for what a full production deployment would require.
+> **Note:** This project demonstrates correct architectural patterns (MCP resources, ReAct loops, SSE streaming, multi-domain routing) with mock tool handlers. It is designed as an educational reference and portfolio showcase, not a production-deployed service. See [Enterprise Assessment](#enterprise-assessment) for what a full production deployment would require.
 
 ---
 
@@ -35,7 +35,7 @@ graph TD
     Backend -->|10. Final Query| Ollama
     Ollama -->|11. Stream| Backend
     Backend -->|12. SSE Chunks| Client
-    Ollama -.->|Load Model| Model[(Gemma 4)]
+    Ollama -.->|Load Model| Model[(Gemma 2)]
 ```
 
 ### Dynamic Agentic Pipeline Flow
@@ -232,20 +232,163 @@ The backend FastAPI gateway runs at `http://127.0.0.1:8435`:
 
 ---
 
-## Production Considerations
+## Enterprise Assessment
 
-This project implements correct architectural **patterns** for agentic AI orchestration. To evolve it into a production-deployed enterprise service, the following operational infrastructure would be needed:
+This project implements correct architectural **patterns** for agentic AI orchestration. The following assessment maps each dimension of the current implementation against what a production-deployed enterprise service would require.
 
-| Area | Current State | Production Requirement |
+### Summary
+
+| Area | Current State | Production Requirement | Gap Severity |
+| :--- | :--- | :--- | :---: |
+| **Connection Lifecycle** | Fresh SSE/TCP per request | Connection pooling with persistent sessions | 🔴 Critical |
+| **Resilience** | No timeouts, retries, or circuit breakers | Timeouts on all external calls, retry with backoff | 🔴 Critical |
+| **Security** | Open CORS, no auth, no rate limiting | JWT/OAuth2, RBAC, rate limiting, TLS, secrets vault | 🔴 Critical |
+| **Scalability** | Single-process Uvicorn, `http.server` for UI | Multi-worker Gunicorn, Nginx, Redis for shared state | 🔴 Critical |
+| **Observability** | Custom text logger to local files | Structured JSON logs, OpenTelemetry, Prometheus | 🟡 High |
+| **Deployment** | Bash scripts (`start.sh` / `stop.sh`) | Docker Compose / Kubernetes, CI/CD, IaC | 🟡 High |
+| **LLM Safety** | No input/output guardrails | Prompt injection protection, output filtering | 🟡 High |
+| **API Maturity** | No versioning, no pagination | `/v1/` versioning, pagination, correlation IDs | 🟡 Medium |
+
+---
+
+### 1. Connection Lifecycle (🔴 Critical)
+
+Every chat request opens fresh TCP + SSE + MCP connections, performs work, then tears them down:
+
+```python
+# agent.py — runs on EVERY request
+async with AsyncExitStack() as stack:
+    for name, url in urls:
+        read, write = await stack.enter_async_context(sse_client(url))
+        session = await stack.enter_async_context(ClientSession(read, write))
+        await session.initialize()  # MCP handshake per request
+```
+
+**Impact:** 100 concurrent users = 100+ simultaneous TCP connections opening/closing. Each pays latency for TCP handshake + SSE setup + MCP `initialize()`. Under load, this exhausts file descriptors and causes cascading failures.
+
+**Production pattern:** Connection pool with health-checked persistent sessions, or a sidecar that maintains long-lived MCP connections.
+
+---
+
+### 2. Resilience (🔴 Critical)
+
+No defensive measures exist for external service failures:
+
+```python
+# No timeout — a hung MCP server blocks the worker forever
+async with sse_client(mcp_url) as (read, write): ...
+
+# No timeout — slow model inference locks the async worker
+response = await client.chat(model=model_name, messages=..., tools=...)
+```
+
+| Missing | Impact |
+| :--- | :--- |
+| Request timeouts | Hung server blocks worker indefinitely |
+| Circuit breaker | Down server gets hammered with connection attempts |
+| Retry with backoff | Transient errors cause immediate failure |
+| Graceful degradation | One failed MCP server can block all requests |
+
+---
+
+### 3. Security (🔴 Critical)
+
+| Vulnerability | Current Code | Risk |
 | :--- | :--- | :--- |
-| **Connection Lifecycle** | Fresh SSE/TCP connections opened per request | Connection pooling with persistent MCP sessions |
-| **Resilience** | No timeouts, retries, or circuit breakers | Timeouts on all external calls, retry with backoff, circuit breakers |
-| **Security** | Open CORS, no auth, no rate limiting | JWT/OAuth2 auth, RBAC, rate limiting, TLS, secrets vault |
-| **Scalability** | Single-process Uvicorn, `http.server` for UI | Multi-worker Gunicorn, Nginx for static files, Redis for shared state |
-| **Observability** | Custom text logger to local files | Structured JSON logs, OpenTelemetry traces, Prometheus metrics |
-| **Deployment** | Bash scripts (`start.sh` / `stop.sh`) | Docker Compose / Kubernetes, CI/CD pipelines, IaC |
-| **LLM Safety** | No input/output guardrails | Prompt injection protection, output filtering, token budget management |
-| **API Maturity** | No versioning, no pagination | API versioning (`/v1/`), pagination, request correlation IDs |
+| Open CORS | `allow_origins=["*"]` in `app.py` | Any website can call the API |
+| No authentication | No middleware | Anyone on network can invoke tools |
+| No rate limiting | None | Single client can exhaust Ollama |
+| Plaintext transport | HTTP only | Traffic visible on network |
+| Secrets in `.env` | Plain text file | Exposed if host compromised |
+
+---
+
+### 4. Scalability (🔴 Critical)
+
+**Frontend** — The UI is served by Python's built-in development server, which is single-threaded and blocking:
+```bash
+# start.sh — not suitable for production
+python3 -m http.server 8080
+```
+
+**Backend** — Single Uvicorn process with no worker pool:
+```python
+# app.py — single worker, no crash recovery
+uvicorn.run(app, host=host, port=port)
+```
+
+**State** — Session tracking is process-local and lost on restart:
+```python
+# logger.py — in-memory, not shareable across workers
+session_files = {}
+```
+
+---
+
+### 5. Observability (🟡 High)
+
+| What Exists | What Enterprise Needs |
+| :--- | :--- |
+| Text logger to local files | Structured JSON logs → ELK / Datadog |
+| No request correlation IDs | Distributed tracing (OpenTelemetry) |
+| No metrics | Prometheus: latency, error rates, queue depth |
+| Basic `/health` check | Liveness + readiness probes for all services |
+
+---
+
+### 6. Deployment (🟡 High)
+
+| Current | Enterprise |
+| :--- | :--- |
+| `bash start.sh` | Docker Compose / Kubernetes manifests |
+| `pkill -f` to stop processes | Container orchestration with restart policies |
+| No environment separation | dev / staging / prod configurations |
+| No CI/CD | Automated test → build → deploy pipeline |
+
+---
+
+### 7. LLM Safety (🟡 High)
+
+| Gap | Risk |
+| :--- | :--- |
+| No prompt injection protection | Users can manipulate system behavior |
+| No output guardrails | Model may return harmful content |
+| No token budget management | Large histories can exceed context window |
+| Hardcoded 8-iteration limit | Not configurable, no warning at limit |
+
+---
+
+### 8. Production Architecture Target
+
+To deploy this as an enterprise service, the architecture would evolve to:
+
+```mermaid
+graph TD
+    LB["Load Balancer / CDN"] --> Nginx["Nginx (Static + Reverse Proxy)"]
+    Nginx --> Auth["Auth Middleware (JWT/OAuth2)"]
+    Auth --> Gateway["FastAPI Gateway (Multi-Worker)"]
+    Gateway --> RateLimit["Rate Limiter (Redis)"]
+    Gateway --> Pool["MCP Connection Pool"]
+    Pool --> MCP1["MCP Server 1 (Container)"]
+    Pool --> MCP2["MCP Server 2 (Container)"]
+    Gateway --> Ollama["Ollama (GPU Node)"]
+    Gateway --> Redis[("Redis (Session + Cache)")]
+    Gateway --> Logs["Structured Logging"]
+    Logs --> ELK["ELK / Datadog"]
+    Gateway --> Metrics["Prometheus Metrics"]
+    Metrics --> Grafana["Grafana Dashboards"]
+```
+
+---
+
+### What This Project Is
+
+✅ A clean, well-tested **reference architecture** demonstrating correct MCP + agentic AI patterns
+✅ An **educational implementation** of ReAct reasoning, SSE streaming, and multi-domain routing
+✅ A **portfolio showcase** with production-grade patterns and mock tool handlers
+✅ An excellent **starting point** for building a production-deployed service
+
+The architectural patterns are sound — they need the operational infrastructure layer (connection pooling, auth, observability, containerization) to carry enterprise production load.
 
 ---
 
