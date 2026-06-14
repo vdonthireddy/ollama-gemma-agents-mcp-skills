@@ -460,6 +460,14 @@ sequenceDiagram
     App-->>UI: Stream final SSE chat chunks
 ```
 
+#### **Step 0: Server Setup & Configuration (Pre-request Setup)**
+Before any user request is made, the MCP servers must expose themselves to the gateway:
+1. **Service Execution:** The Vacation Travel Planner and Birthday Party Planner MCP servers are launched as separate, standalone processes (listening on ports `8001` and `8002` respectively).
+2. **Server Exposure:** The servers register their respective SSE connection endpoints within the shared `.env` file:
+   - `TRAVEL_MCP_URL=http://127.0.0.1:8001/sse`
+   - `PARTY_MCP_URL=http://127.0.0.1:8002/sse`
+This acts as the local service registry that the agent reads at runtime to locate available servers.
+
 #### **Step 1: Frontend Request**
 The user selects the **Vacation Travel Planner** domain and enters the prompt. The browser client (`index.html`) issues an HTTP `POST` request to `/chat/stream` with the conversation history and active domain:
 *   **Payload:**
@@ -474,17 +482,10 @@ The user selects the **Vacation Travel Planner** domain and enters the prompt. T
     ```
 
 #### **Step 2: Gateway Entry & Agent Call (`app.py` & `agent.py`)**
-
-To connect to any tools, the agent must first discover and establish a session with the corresponding MCP server. Here is how the server exposure and agent discovery flow works:
-
-1. **Server Exposure (Registration):** The Travel and Party MCP servers run as independent, standalone processes (configured in `start.sh` and listening on ports `8001` and `8002` respectively). They expose themselves by registering their network URLs in the `.env` configuration file:
-   - `TRAVEL_MCP_URL=http://127.0.0.1:8001/sse`
-   - `PARTY_MCP_URL=http://127.0.0.1:8002/sse`
-2. **Discovery (Environment Lookup):** When the gateway receives a request (e.g. for `domain="travel"`), the agent does not connect blindly or hardcode the address. It looks up the system environment variables for keys matching `{domain.upper()}_MCP_URL`.
-   - If `domain="travel"`, it retrieves `TRAVEL_MCP_URL`.
-   - If `domain="all"` or `domain="unified"`, it dynamically iterates all environment keys ending with `_MCP_URL` to route calls to both servers.
-3. **Transport Connection & Handshake:** The agent invokes `check_and_run_tools()`, opening an asynchronous connection via Server-Sent Events (SSE) using the resolved server URL (e.g. `http://127.0.0.1:8001/sse`). It wraps the connection in an MCP `ClientSession` and completes the initialization handshake.
-4. **Dynamic Tool Registration:** The agent calls `list_tools()` over the session. The MCP server returns its list of available tools (schemas, descriptions, and parameter definitions). The agent then registers them locally under a `tool_to_session` router map, allowing it to route subsequent LLM tool calls to the correct server session.
+1. **Gateway Call:** The gateway endpoint `chat_stream` in `app.py` receives the payload and invokes `check_and_run_tools()`.
+2. **Dynamic Server Discovery:** The agent does not hardcode server endpoints. Instead, it inspects the system environment variables loaded from the `.env` file, looking up the key matching `{domain.upper()}_MCP_URL` (e.g. `TRAVEL_MCP_URL`). If `domain="all"` or `domain="unified"`, it dynamically iterates all keys ending in `_MCP_URL`.
+3. **Transport Handshake:** The agent connects to the resolved SSE URL (e.g., `http://127.0.0.1:8001/sse`) using the Server-Sent Events standard transport (`sse_client`), initializes an MCP `ClientSession`, and performs the initial protocol handshake.
+4. **Dynamic Tool Registration:** The agent invokes `list_tools()` over the network session. The MCP server returns its supported tool schemas. The agent registers them dynamically in a local `tool_to_session` router map to handle subsequent LLM tool calls.
 
 #### **Step 3: ReAct Reasoning Loop & Execution Trace (`agent.py`)**
 1. **Turn 1 (Search):** The agent queries Ollama. Ollama identifies that the user wants to book a flight but needs flight options first, returning a request to call `search_flights(origin='New York', destination='Paris', date='2026-08-10')`. The agent executes the tool over HTTP/SSE, which returns a list of flight choices (including `FL-101`).
