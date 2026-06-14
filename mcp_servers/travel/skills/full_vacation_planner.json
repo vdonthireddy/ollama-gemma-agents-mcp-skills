@@ -1,0 +1,7 @@
+{
+  "id": "full_vacation_planner",
+  "name": "Full Vacation Planner Pipeline",
+  "description": "Orchestrate a complete trip: search and book flights, find and book accommodation, and compile everything into a travel itinerary.",
+  "sequence": ["search_flights", "book_flight", "search_hotels", "book_hotel", "generate_travel_itinerary"],
+  "instructions": "First, search flights from origin to destination. Second, book the flight. Third, search hotels in the destination city. Fourth, book the hotel. Fifth, generate a travel itinerary combining both the flight and hotel bookings."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "invitation_budget",
+  "name": "Invitation & Budget Setup",
+  "description": "Send invitations to guests, calculate estimated expenses based on RSVPs, and send final reminders.",
+  "sequence": ["invite_guests", "budget_expenses", "send_reminders"],
+  "instructions": "First, invite guests to get the RSVP count. Second, calculate the budget expenses based on the RSVP count. Third, send final reminders to the confirmed guests."
+}

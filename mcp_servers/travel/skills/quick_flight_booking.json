@@ -1,0 +1,7 @@
+{
+  "id": "quick_flight_booking",
+  "name": "Quick Flight Booking Pipeline",
+  "description": "Search for flight tickets, book the chosen flight, and compile a travel itinerary.",
+  "sequence": ["search_flights", "book_flight", "generate_travel_itinerary"],
+  "instructions": "First, search flights for the requested origin, destination, and date. Second, book the flight selected from the search results. Third, generate a travel itinerary with the flight booking confirmation details."
+}

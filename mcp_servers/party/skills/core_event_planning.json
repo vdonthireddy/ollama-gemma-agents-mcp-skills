@@ -1,0 +1,7 @@
+{
+  "id": "core_event_planning",
+  "name": "Core Event Planning Sequence",
+  "description": "Handle the core tasks: invite guests, budget costs, book the venue, order the cake, and send reminders.",
+  "sequence": ["invite_guests", "budget_expenses", "book_venue", "order_cake", "send_reminders"],
+  "instructions": "First, invite guests. Second, estimate budget costs based on RSVPs. Third, book the venue. Fourth, order the cake. Fifth, send reminders with the venue address."
+}

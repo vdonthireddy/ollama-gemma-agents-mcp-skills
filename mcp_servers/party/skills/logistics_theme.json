@@ -1,0 +1,7 @@
+{
+  "id": "logistics_theme",
+  "name": "Logistics & Theme Purchasing",
+  "description": "Book a venue, order a customized birthday cake, hire entertainment, and buy themed decorations.",
+  "sequence": ["book_venue", "order_cake", "hire_entertainment", "buy_decorations"],
+  "instructions": "First, book a venue suitable for the guest count. Second, order a customized cake. Third, hire event entertainment. Fourth, purchase themed decorations."
+}

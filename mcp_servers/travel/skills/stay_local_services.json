@@ -1,0 +1,7 @@
+{
+  "id": "stay_local_services",
+  "name": "Accommodation & Ground Services Pipeline",
+  "description": "Find and book hotels, rent a car, and purchase tickets for local tours or attractions.",
+  "sequence": ["search_hotels", "book_hotel", "rent_car", "book_attraction"],
+  "instructions": "First, search hotels in the target city under the requested budget. Second, book the hotel selected. Third, rent a car in the city. Fourth, book the requested attraction ticket."
+}
