@@ -2,6 +2,7 @@ import unittest
 import sys
 import os
 import asyncio
+import json
 
 # Append project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +22,20 @@ class TestMcpRegistry(unittest.TestCase):
         for t in expected_tools:
             self.assertIn(t, tool_names, f"Tool {t} not found in travel MCP server")
 
+    def test_travel_mcp_resources(self):
+        # Verify that skills://list resource is registered
+        resources = asyncio.run(travel_mcp.list_resources())
+        resource_uris = [str(r.uri) for r in resources]
+        self.assertIn("skills://list", resource_uris)
+
+        # Verify reading the resource returns skills json
+        res = asyncio.run(travel_mcp.read_resource("skills://list"))
+        self.assertTrue(len(res.contents) > 0)
+        skills = json.loads(res.contents[0].content)
+        self.assertTrue(isinstance(skills, list))
+        self.assertEqual(len(skills), 3)
+        self.assertEqual(skills[0]["id"], "full_vacation_planner")
+
     def test_party_mcp_registration(self):
         tools = asyncio.run(party_mcp.list_tools())
         tool_names = [t.name for t in tools]
@@ -31,5 +46,20 @@ class TestMcpRegistry(unittest.TestCase):
         for t in expected_tools:
             self.assertIn(t, tool_names, f"Tool {t} not found in party MCP server")
 
+    def test_party_mcp_resources(self):
+        # Verify that skills://list resource is registered
+        resources = asyncio.run(party_mcp.list_resources())
+        resource_uris = [str(r.uri) for r in resources]
+        self.assertIn("skills://list", resource_uris)
+
+        # Verify reading the resource returns skills json
+        res = asyncio.run(party_mcp.read_resource("skills://list"))
+        self.assertTrue(len(res.contents) > 0)
+        skills = json.loads(res.contents[0].content)
+        self.assertTrue(isinstance(skills, list))
+        self.assertEqual(len(skills), 3)
+        self.assertEqual(skills[0]["id"], "core_event_planning")
+
 if __name__ == "__main__":
+    import json
     unittest.main()

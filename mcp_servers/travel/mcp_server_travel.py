@@ -68,6 +68,21 @@ def generate_travel_itinerary(bookings: list) -> str:
     result = generate_travel_itinerary_handler(bookings, session_name=SESSION_NAME)
     return json.dumps(result)
 
+@mcp.resource("skills://list", mime_type="application/json")
+def list_skills() -> str:
+    """List travel planning skills available on this server."""
+    skills_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skills")
+    skills_list = []
+    if os.path.exists(skills_dir):
+        try:
+            for file in sorted(os.listdir(skills_dir)):
+                if file.endswith(".json"):
+                    with open(os.path.join(skills_dir, file), "r") as f:
+                        skills_list.append(json.load(f))
+        except Exception:
+            pass
+    return json.dumps(skills_list)
+
 if __name__ == "__main__":
     import os
     host = os.getenv("TRAVEL_MCP_HOST", "127.0.0.1")

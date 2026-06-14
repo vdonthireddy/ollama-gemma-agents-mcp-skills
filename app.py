@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
+from mcp import ClientSession
+from mcp.client.sse import sse_client
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -55,21 +57,37 @@ async def get_tools(domain: str = "travel"):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/skills")
-def get_skills(domain: str = "travel"):
+async def get_skills(domain: str = "travel"):
     """
-    Expose dynamic workflow skills based on domain.
+    Expose dynamic workflow skills based on domain by querying MCP servers.
     """
     skills_list = []
-    skills_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mcp_servers", domain, "skills")
-    if os.path.exists(skills_dir):
+    urls = []
+    if domain in ("all", "unified"):
+        for key, val in os.environ.items():
+            if key.endswith("_MCP_URL") and val:
+                urls.append(val)
+    else:
+        target_key = f"{domain.upper()}_MCP_URL"
+        val = os.getenv(target_key)
+        if val:
+            urls.append(val)
+            
+    for mcp_url in urls:
         try:
-            for file in sorted(os.listdir(skills_dir)):
-                if file.endswith(".json"):
-                    with open(os.path.join(skills_dir, file), "r") as f:
-                        skill_data = json.load(f)
-                        skills_list.append(skill_data)
+            async with sse_client(mcp_url) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    res = await session.read_resource("skills://list")
+                    if res and res.contents:
+                        for content in res.contents:
+                            if hasattr(content, "text") and content.text:
+                                loaded_skills = json.loads(content.text)
+                                if isinstance(loaded_skills, list):
+                                    skills_list.extend(loaded_skills)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=f"Failed to fetch skills from server {mcp_url}: {e}")
+            
     return skills_list
 
 @app.post("/chat")
@@ -81,7 +99,7 @@ async def chat_completion(request: ChatRequest):
         messages_list = [msg.model_dump() for msg in request.messages]
         
         # Inject system prompt specific to domain
-        sys_msg = {"role": "system", "content": get_system_prompt(domain)}
+        sys_msg = {"role": "system", "content": await get_system_prompt(domain)}
         if messages_list and messages_list[0].get("role") == "system":
             messages_list[0] = sys_msg
         else:
@@ -130,7 +148,7 @@ async def chat_stream(request: ChatRequest):
             messages_list = [msg.model_dump() for msg in request.messages]
             
             # Inject system prompt specific to domain
-            sys_msg = {"role": "system", "content": get_system_prompt(domain)}
+            sys_msg = {"role": "system", "content": await get_system_prompt(domain)}
             if messages_list and messages_list[0].get("role") == "system":
                 messages_list[0] = sys_msg
             else:

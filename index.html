@@ -1214,7 +1214,7 @@
             <div class="empty-state" id="empty-state">
                 <div class="empty-icon">🤖</div>
                 <h3>GemmaJnana</h3>
-                <p>Welcome! Type a prompt below to communicate with the local GemmaJnana (Google Gemma 4 Effective 4B) assistant via FastAPI.</p>
+                <p>Welcome! Type a prompt below to communicate with the local GemmaJnana assistant via FastAPI.</p>
             </div>
         </div>
 
@@ -1231,7 +1231,7 @@
             </div>
             <div class="settings-bar">
                 <div class="settings-item">
-                    <span>Model: <strong style="color: var(--text-primary);">gemma4:e4b</strong></span>
+                    <span>Model: <strong id="model-label" style="color: var(--text-primary);">gemma4:e4b</strong></span>
                 </div>
                 <div class="settings-item">
                     <label for="domain-select">Domain:</label>
@@ -1542,6 +1542,10 @@
                 if (data.status === 'healthy') {
                     indicator.className = 'status-dot online';
                     text.textContent = 'API Gateway & Ollama Connected';
+                    if (data.model) {
+                        const mLabel = document.getElementById('model-label');
+                        if (mLabel) mLabel.textContent = data.model;
+                    }
                 } else if (data.status === 'warning') {
                     indicator.className = 'status-dot online';
                     indicator.style.backgroundColor = '#ff9800';

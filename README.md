@@ -44,15 +44,14 @@ sequenceDiagram
     participant Client as "Browser Client"
     participant App as "app.py"
     participant Agent as "agent.py"
-    participant Skills as "Skills Directory (mcp_servers/<domain>/skills/)"
     participant Ollama as "Ollama Service"
     participant MCPServer as "MCP SSE Server (port 8001/8002)"
 
     Client->>App: POST /chat/stream with history & domain
+    App->>MCPServer: get_system_prompt() queries read_resource("skills://list")
+    MCPServer-->>App: Returns predefined pipelines & sequences
+    Note over App: Compiles system prompt with skills context
     App->>Agent: check_and_run_tools(messages, model, domain)
-    Agent->>Skills: Load JSON skill configurations
-    Skills-->>Agent: Return predefined pipelines & sequences
-    Note over Agent: Compiles dynamic system prompt with skills context
     Note over Agent: Connects to MCP SSE Server over HTTP/SSE
     Agent->>MCPServer: list_tools()
     MCPServer-->>Agent: Returns active domain tools
@@ -78,6 +77,28 @@ sequenceDiagram
     Ollama-->>App: Stream response chunks
     App-->>Client: Stream SSE chat chunks
 ```
+
+---
+
+## Dynamic Routing Design Patterns (Automated Domain Switching)
+
+To automate domain and skill selection rather than forcing the user to manually select the domain via the UI dropdown, two primary design patterns can be used:
+
+### Pattern 1: Intent Classification (Two-Pass Routing)
+A lightweight classification pass is performed on the backend before the agent starts:
+1. **Classifier Turn:** The backend intercepts the user's prompt and queries the LLM with a brief instructions:
+   > *"Classify the user's query into one of these categories: 'travel' or 'party'. Respond only with the category name."*
+2. **Targeted Connection:** Once the category is determined, the agent connects only to that specific MCP server (port `8001` or `8002`), loads that domain's instructions, and executes.
+*   **Pros:** Keeps LLM context small and focused; minimizes token usage and potential model drift.
+*   **Cons:** Requires a preliminary LLM reasoning pass, introducing a small latency before tool execution begins.
+
+### Pattern 2: Unified Multi-MCP Router (Single-Pass Agent) - [Implemented in this project]
+Exposes all tools and skills from both domains to the LLM simultaneously:
+1. **Unified Client Session:** The client (`agent.py`) opens dual SSE connections to both the Travel and Party MCP servers at startup.
+2. **Tool Aggregation:** The complete set of 14 tools is discovered, combined, and registered. When the LLM issues a tool call, the agent automatically routes it to the corresponding server session.
+3. **Preloaded Skills:** Predefined JSON skills from both domains are merged into the system prompt, allowing the LLM to select and follow the correct pipeline dynamically based on the input text.
+*   **Pros:** Single-pass execution (no classifier latency); allows the LLM to mix-and-match tools from both domains in the same session.
+*   **Cons:** Increases the token size of the system prompt and tool pool.
 
 ---
 
@@ -176,7 +197,7 @@ To run this application, make sure you have:
     ```bash
     ./start.sh
     ```
-    This script automatically updates Ollama, pulls the `gemma4:e4b` model, installs required dependencies, runs the backend API Gateway (port `8435`), and spins up a local web server (port `8080`).
+    This script automatically updates Ollama, pulls the `gemma2:2b` model, installs required dependencies, runs the backend API Gateway (port `8435`), and spins up a local web server (port `8080`).
 
 2.  **Open the Web Playground**:
     Navigate to [**`http://localhost:8080`**](http://localhost:8080) in your browser. Toggle between **Vacation Travel Planner** and **Birthday Party Planner** domains dynamically using the selector in the upper right.
@@ -203,7 +224,7 @@ python3 -m unittest discover -s tests
 The backend FastAPI gateway runs at `http://127.0.0.1:8435`:
 *   `GET /health`: Diagnoses model presence and connection status.
 *   `GET /tools?domain=...`: Lists active tools dynamically registered by FastMCP for the specified domain.
-*   `GET /skills?domain=...`: Retrieves predefined JSON skill pipelines for the specified domain.
+*   `GET /skills?domain=...`: Retrieves predefined JSON skill pipelines for the specified domain dynamically from the MCP server resource.
 *   `POST /chat`: Simple non-streaming message response endpoint.
 *   `POST /chat/stream`: Initiates an SSE text stream event channel, sending live tracer cards for active tools.
 

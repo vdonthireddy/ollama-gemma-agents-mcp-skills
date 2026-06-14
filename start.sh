@@ -102,14 +102,14 @@ else
     echo -e "${GREEN}Ollama server is already running.${NC}"
 fi
 
-# 3. Pull the gemma4:e4b model
-echo -e "\n${YELLOW}Checking if gemma4:e4b is available locally...${NC}"
-if ! ollama list | grep -q "gemma4:e4b"; then
-    echo -e "${YELLOW}gemma4:e4b not found. Downloading model...${NC}"
-    ollama pull gemma4:e4b || { echo -e "${RED}Failed to pull model.${NC}"; exit 1; }
-    echo -e "${GREEN}Model gemma4:e4b downloaded successfully!${NC}"
+# 3. Pull the gemma2:2b model
+echo -e "\n${YELLOW}Checking if gemma2:2b is available locally...${NC}"
+if ! ollama list | grep -q "gemma2:2b"; then
+    echo -e "${YELLOW}gemma2:2b not found. Downloading model...${NC}"
+    ollama pull gemma2:2b || { echo -e "${RED}Failed to pull model.${NC}"; exit 1; }
+    echo -e "${GREEN}Model gemma2:2b downloaded successfully!${NC}"
 else
-    echo -e "${GREEN}gemma4:e4b is already downloaded.${NC}"
+    echo -e "${GREEN}gemma2:2b is already downloaded.${NC}"
 fi
 
 # 4. Start the FastAPI Gateway and MCP Servers in the background
