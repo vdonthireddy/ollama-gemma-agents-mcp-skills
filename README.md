@@ -10,6 +10,7 @@ A **production-pattern reference implementation** demonstrating how to build mul
 - [Project Architecture Flow](#project-architecture-flow)
   - [Data Flow Diagram](#data-flow-diagram)
   - [Dynamic Agentic Pipeline Flow](#dynamic-agentic-pipeline-flow)
+  - [Dynamic Skills & Tools Discovery Mechanics](#dynamic-skills--tools-discovery-mechanics)
 - [Dynamic Routing Design Patterns](#dynamic-routing-design-patterns-automated-domain-switching)
   - [Pattern 1: Intent Classification (Two-Pass Routing)](#pattern-1-intent-classification-two-pass-routing)
   - [Pattern 2: Unified Multi-MCP Router (Single-Pass Agent)](#pattern-2-unified-multi-mcp-router-single-pass-agent---implemented-in-this-project)
@@ -112,6 +113,28 @@ sequenceDiagram
     Ollama-->>App: Stream response chunks
     App-->>Client: Stream SSE chat chunks
 ```
+
+### Dynamic Skills & Tools Discovery Mechanics
+
+To establish complete decoupling between the orchestration agent and the domain-specific services, the system relies on dynamic runtime discovery rather than static imports or local directory scanning:
+
+#### 1. Dynamic Skills Discovery (Compile-Time Prompt Construction)
+* **Goal**: Inject domain-specific workflow guidelines (e.g. Flight booking pipeline must follow `search_flights` ➔ `book_flight`) into the system prompt.
+* **Mechanism**: When a client request lands, `app.py` triggers `get_system_prompt(domain)`. This method connects to the matching server SSE URL configured in the environment, performs the MCP protocol handshake, and reads the custom resource URI:
+  ```python
+  res = await session.read_resource("skills://list")
+  ```
+* **Payload**: The MCP server returns a JSON-serialized list of pipelines (each with a name, strict execution sequence, and logic rules).
+* **Injection**: The agent deserializes this list, formats it as Markdown, and appends it to the system prompt. The SSE connection is then closed.
+
+#### 2. Dynamic Tools Discovery (ReAct Runtime Registration)
+* **Goal**: Expose active server capabilities (schemas and definitions) directly to the LLM.
+* **Mechanism**: At the start of `check_and_run_tools()`, the agent connects to the resolved target server(s). It performs the standard handshake and requests the list of tools via JSON-RPC:
+  ```python
+  tools_res = await session.list_tools()
+  ```
+* **Binding**: The agent registers the returned schemas in a local `tool_to_session` mapping. This router matches the requested function name to the corresponding active SSE server session when the LLM makes a tool call.
+* **Awareness**: The tool schemas are converted into Ollama's tool configuration format and passed to the model on each reasoning turn (`client.chat(tools=...)`).
 
 ---
 
